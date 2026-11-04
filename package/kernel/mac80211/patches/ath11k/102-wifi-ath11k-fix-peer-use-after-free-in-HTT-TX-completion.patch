@@ -1,0 +1,27 @@
+From: Yong Liu <lyrids@me.com>
+Subject: [PATCH] wifi: ath11k: fix peer use-after-free in HTT TX completion
+
+ath11k_dp_tx_htt_tx_complete_buf() looks up the peer under
+ab->base_lock but drops the lock before reading peer->sta.
+ath11k_peer_unmap_event() can free the peer under the same lock in
+between, so peer->sta is read from freed memory.
+
+Read peer->sta while base_lock is still held, matching
+ath11k_dp_tx_complete_msdu().
+
+Signed-off-by: Yong Liu <lyrids@me.com>
+---
+--- a/drivers/net/wireless/ath/ath11k/dp_tx.c
++++ b/drivers/net/wireless/ath/ath11k/dp_tx.c
+@@ -377,9 +377,10 @@
+ 		ieee80211_free_txskb(ar->hw, msdu);
+ 		return;
+ 	}
+-	spin_unlock_bh(&ab->base_lock);
+ 
+ 	status.sta = peer->sta;
++	spin_unlock_bh(&ab->base_lock);
++
+ 	status.info = info;
+ 	status.skb = msdu;
+ 
