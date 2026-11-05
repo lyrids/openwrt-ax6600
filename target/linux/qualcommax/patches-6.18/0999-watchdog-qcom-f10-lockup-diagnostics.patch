@@ -1,0 +1,29 @@
+--- a/drivers/watchdog/qcom-wdt.c
++++ b/drivers/watchdog/qcom-wdt.c
+@@ -8,6 +8,7 @@
+ #include <linux/io.h>
+ #include <linux/kernel.h>
+ #include <linux/module.h>
++#include <linux/nmi.h>
+ #include <linux/of.h>
+ #include <linux/platform_device.h>
+ #include <linux/watchdog.h>
+@@ -66,6 +67,9 @@
+ {
+ 	struct watchdog_device *wdd = arg;
+ 
++	pr_emerg("F10-DIAG: Qualcomm watchdog bark; dumping CPU stacks\n");
++	dump_stack();
++	trigger_all_cpu_backtrace();
+ 	watchdog_notify_pretimeout(wdd);
+ 
+ 	return IRQ_HANDLED;
+@@ -259,7 +263,7 @@
+ 			return ret;
+ 
+ 		wdt->wdd.info = &qcom_wdt_pt_info;
+-		wdt->wdd.pretimeout = 1;
++		wdt->wdd.pretimeout = 5;
+ 	} else {
+ 		if (irq == -EPROBE_DEFER)
+ 			return -EPROBE_DEFER;

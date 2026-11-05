@@ -186,6 +186,8 @@
 
 /* PPE queue to receive ring mapping: a four-bit ring id per switch queue. */
 #define EDMA_QID2RID_TABLE_MEM(n)	(0x5a000 + (0x4 * (n)))
+/* CPU-port queue IDs; higher queues belong to NSS while it runs. */
+#define EDMA_CPU_QUEUES			16
 #define EDMA_QID2RID_DEPTH		0x40
 #define EDMA_QID2RID_RING_MASK		0xf
 #define EDMA_QID2RID_QUEUES_PER_ENTRY	8

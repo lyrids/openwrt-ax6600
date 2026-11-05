@@ -17,6 +17,8 @@
  */
 
 #include <linux/bitfield.h>
+#include <linux/debugfs.h>
+#include <linux/seq_file.h>
 #include <linux/qca_edma.h>
 #include <linux/hash.h>
 #include <linux/if_pppox.h>
@@ -52,6 +54,8 @@ struct ppe_flow_data {
 	bool pppoe_valid;
 
 	struct net_device *odev;
+	u32 mtu;
+	int l3if;
 	/* The profile the entry is given; filled only where the flowtable
 	 * reports a priority, and zero means DSCP still decides.
 	 */
@@ -72,6 +76,10 @@ struct ppe_flow_entry {
 	u8 quiet;
 	bool sparse;
 	u8 src_if;
+	bool steer;
+	int l3if;
+	u32 ip_mtu;
+	u32 egress_mtu;
 	u32 host_index;
 	int nexthop;
 	int my_mac;
@@ -984,9 +992,45 @@ static void ppe_flow_shaper_track(struct qca_ppe_priv *priv,
 	}
 }
 
+/* Called under RCU: include lower/upper dependencies, not just the port
+ * finally selected by the bridge/DSA path resolver.
+ */
+static bool ppe_flow_depends_on(const struct ppe_flow_entry *entry,
+			       const struct net_device *changed)
+{
+	const struct flow_offload_tuple *tuple = (void *)entry->cookie;
+	struct net_device *logical;
+
+	if (tuple->iifidx == changed->ifindex || entry->l3if == changed->ifindex)
+		return true;
+	logical = dev_get_by_index_rcu(dev_net(changed), entry->l3if);
+	return logical &&
+	       (netdev_has_upper_dev_all_rcu((struct net_device *)changed, logical) ||
+		netdev_has_upper_dev_all_rcu(logical, (struct net_device *)changed));
+}
+
+/* The switch may be built in while nf_flow_table is a module. Take a
+ * module reference for this event instead of adding a built-in dependency.
+ * A live tuple is owned by that module, so failure is defensive only.
+ */
+static void ppe_flow_teardown(struct flow_offload *flow)
+{
+#if IS_REACHABLE(CONFIG_NF_FLOW_TABLE)
+	flow_offload_teardown(flow);
+#else
+	void (*teardown)(struct flow_offload *);
+
+	teardown = symbol_get(flow_offload_teardown);
+	if (teardown) {
+		teardown(flow);
+		symbol_put(flow_offload_teardown);
+	}
+#endif
+}
+
 /* Each half of the size check follows the device that owns it: the routing
  * domain's MRU follows the device that routes for the port, and the egress size
- * a flow was built with follows the port itself.
+ * a flow was built with follows its routed upper and underlying link.
  *
  * Neither can be taken from DSA's port_change_mtu. That runs before the bridge
  * recomputes its own MTU, so a bridged port reads the previous one there, and
@@ -1009,6 +1053,9 @@ static int ppe_flow_netdev_event(struct notifier_block *nb, unsigned long event,
 	struct dsa_port *dp;
 	int i;
 
+	if (!net_eq(dev_net(dev), &init_net))
+		return NOTIFY_DONE;
+
 	if (event == NETDEV_REGISTER || event == NETDEV_UNREGISTER ||
 	    event == NETDEV_CHANGENAME || event == NETDEV_UP) {
 		guard(mutex)(&priv->flow_lock);
@@ -1017,11 +1064,36 @@ static int ppe_flow_netdev_event(struct notifier_block *nb, unsigned long event,
 		return NOTIFY_DONE;
 	}
 
-	if (event != NETDEV_CHANGEMTU && event != NETDEV_CHANGEADDR)
+	if (event != NETDEV_PRECHANGEMTU && event != NETDEV_CHANGEMTU &&
+	    event != NETDEV_CHANGEUPPER && event != NETDEV_DOWN &&
+	    event != NETDEV_CHANGEADDR)
 		return NOTIFY_DONE;
 
 	guard(mutex)(&priv->flow_lock);
 	guard(mutex)(&priv->vlan_lock);
+
+	/* Retire the connection, including the kernel's cached route MTU.
+	 * Removing just a hardware row lets the old tuple be offered again.
+	 */
+	list_for_each_entry_safe(entry, tmp, &priv->flow_list, list) {
+		bool affected;
+		const struct flow_offload_tuple *tuple = (void *)entry->cookie;
+		struct flow_offload_tuple_rhash *th;
+		struct flow_offload *flow;
+
+		scoped_guard(rcu)
+			affected = ppe_flow_depends_on(entry, dev);
+		if (!affected)
+			continue;
+		th = container_of(tuple, struct flow_offload_tuple_rhash, tuple);
+		flow = container_of(th, struct flow_offload, tuplehash[tuple->dir]);
+		ppe_flow_teardown(flow);
+		ppe_flow_drop(priv, entry);
+		priv->flow_mtu_invalidated++;
+	}
+	if (event == NETDEV_PRECHANGEMTU || event == NETDEV_CHANGEUPPER ||
+	    event == NETDEV_DOWN)
+		return NOTIFY_DONE;
 
 	/* Reached through the netdev itself rather than by walking the switch:
 	 * this notifier is live before the switch is registered, and every
@@ -1801,6 +1873,41 @@ int ppe_flow_shaper_set(struct qca_ppe_priv *priv, bool upload,
 	return 0;
 }
 
+/* Logical upper MTU exception handling still needs packet-level
+ * qualification. Keep the default fallback until that experiment passes.
+ */
+static bool ppe_logical_mtu_offload;
+module_param_named(logical_mtu_offload, ppe_logical_mtu_offload, bool, 0444);
+MODULE_PARM_DESC(logical_mtu_offload,
+	"Enable experimental logical MTU hardware enforcement at boot (default off)");
+
+static bool ppe_flow_mtu_supported(u32 ip_mtu, u32 link_mtu, bool pppoe,
+				   bool push)
+{
+	u32 overhead = pppoe && push ? PPPOE_SES_HLEN : 0;
+
+	if (link_mtu < overhead)
+		return false;
+	return ppe_logical_mtu_offload || ip_mtu >= link_mtu - overhead;
+}
+
+/* L3-interface MTU is an IP limit, independent of port frame headroom.
+ * Adding Ethernet/VLAN headers here admits oversized routed IP packets; the
+ * port's separate MRU/MTU limits still reserve room for tagged frames.
+ */
+static int ppe_flow_l3_mtu(u32 ip_mtu, u32 link_mtu, bool pppoe, bool push)
+{
+	u32 overhead = pppoe && push ? PPPOE_SES_HLEN : 0;
+	u32 mtu;
+
+	if (ip_mtu < 68 || link_mtu < overhead + 68)
+		return -EOPNOTSUPP;
+	mtu = min_t(u32, ip_mtu, link_mtu - overhead);
+	if (mtu > FIELD_MAX(PPE_L3_IF_MTU))
+		return -EOPNOTSUPP;
+	return mtu;
+}
+
 /* One path's egress L3 interface and nexthop words: out of @port with the
  * headers pushed in hardware (@push), or handed over through the CPU port for
  * the host to build them. Returns the egress interface index.
@@ -1825,16 +1932,22 @@ static int ppe_flow_egress_path(struct qca_ppe_priv *priv,
 		ppe_entry_set(words, PPE_EG_L3_IF_PPPOE_EN_OFF,
 			      PPE_EG_L3_IF_PPPOE_EN_LEN, 1);
 	}
-	/* The size a routed frame leaves at, which the hardware compares before
-	 * it egresses and sends the frame to the CPU when it does not fit. The
-	 * port's mtu carries one mac header and the vlan tag the nexthop pushes;
-	 * a pppoe session header rides inside that mtu rather than on top of it.
-	 * It joins the key because two interfaces sharing a source address need
-	 * separate entries when they do not share a size.
+	/* The nexthop selects an IP MTU; tagged L2 frame capacity belongs
+	 * to the physical port and must not inflate this routed limit.
 	 */
 	odp = dsa_to_port(&priv->ds, port);
-	eg_mtu = odp->user->mtu + ETH_HLEN +
-		 (data->vlan_valid && push ? VLAN_HLEN : 0);
+	if (!ppe_flow_mtu_supported(data->mtu,
+				    READ_ONCE((odp->user ?: data->odev)->mtu),
+				    data->pppoe_valid, push)) {
+		priv->flow_mtu_rejected++;
+		return -EOPNOTSUPP;
+	}
+	ret = ppe_flow_l3_mtu(data->mtu,
+				READ_ONCE((odp->user ?: data->odev)->mtu),
+				data->pppoe_valid, push);
+	if (ret < 0)
+		return ret;
+	eg_mtu = ret;
 	/* A flow handed to the uplink device leaves at that device's size,
 	 * which for PPPoE is under the port's; a larger frame then takes the
 	 * host's path, which fragments it or answers with ICMP.
@@ -1852,9 +1965,10 @@ static int ppe_flow_egress_path(struct qca_ppe_priv *priv,
 		rcu_read_lock();
 		ul = dev_get_by_index_rcu(&init_net, ifindex);
 		if (ul)
-			eg_mtu = min_t(u32, eg_mtu, ul->mtu + ETH_HLEN);
+			eg_mtu = min_t(u32, eg_mtu, READ_ONCE(ul->mtu));
 		rcu_read_unlock();
 	}
+	entry->egress_mtu = eg_mtu;
 	words[PPE_EG_L3_IF_WORDS] = eg_mtu;
 
 	/* An L3 interface is one index with an ingress half and an egress half.
@@ -2080,7 +2194,7 @@ static void ppe_flow_account(struct qca_ppe_priv *priv,
 {
 	lockdep_assert_held(&priv->flow_lock);
 
-	if (!pkts)
+	if (!pkts || entry->steer)
 		return;
 
 	entry->unread_packets += pkts;
@@ -2134,13 +2248,28 @@ static void ppe_flow_entry_destroy(struct qca_ppe_priv *priv,
 	ppe_flow_free_ingress(priv, entry);
 }
 
+/* Whether the NSS firmware forwards to @dev, which is then not a switch port. */
+static bool ppe_flow_fw_carries(struct qca_ppe_priv *priv,
+				struct net_device *dev)
+{
+	bool (*carries)(int ifindex);
+
+	if (ppe_flow_port_by_ifindex(priv, dev->ifindex) >= 0)
+		return false;
+
+	guard(rcu)();
+	carries = rcu_dereference(priv->fw_carries);
+
+	return carries && carries(dev->ifindex);
+}
+
 /* Encode the flow entry and its host half. The key is always the tuple as the
  * packet arrives: the destination address in the flow entry, the source address
  * in the host entry.
  */
 static void ppe_flow_encode(struct ppe_flow_data *data, bool v6, bool snat,
-			    bool dnat, u32 nexthop, u32 src_if, u32 *fw,
-			    u32 *hw)
+			    bool dnat, bool steer, u32 nexthop, u32 src_if,
+			    u32 *fw, u32 *hw)
 {
 	u32 fwd;
 
@@ -2162,11 +2291,15 @@ static void ppe_flow_encode(struct ppe_flow_data *data, bool v6, bool snat,
 	ppe_entry_set(fw, PPE_FLOW_E_PRI_PROFILE_OFF,
 		      PPE_FLOW_E_PRI_PROFILE_LEN, data->priority);
 
-	fwd = snat ? PPE_FLOW_FWD_SNAT : dnat ? PPE_FLOW_FWD_DNAT :
-						PPE_FLOW_FWD_ROUTE;
+	fwd = steer ? PPE_FLOW_FWD_BRIDGE : snat ? PPE_FLOW_FWD_SNAT :
+	      dnat ? PPE_FLOW_FWD_DNAT : PPE_FLOW_FWD_ROUTE;
 	ppe_entry_set(fw, PPE_FLOW_E_FWD_TYPE_OFF, PPE_FLOW_E_FWD_TYPE_LEN, fwd);
-	ppe_entry_set(fw, PPE_FLOW_E_NEXTHOP_OFF, PPE_FLOW_E_NEXTHOP_LEN,
-		      nexthop);
+	if (steer)
+		ppe_entry_set(fw, PPE_FLOW_E_PORT_OFF, PPE_FLOW_E_PORT_LEN,
+			      QCA_PPE_CPU_PORT);
+	else
+		ppe_entry_set(fw, PPE_FLOW_E_NEXTHOP_OFF, PPE_FLOW_E_NEXTHOP_LEN,
+			      nexthop);
 	if (snat)
 		ppe_entry_set(fw, PPE_FLOW_E_NEW_PORT_OFF,
 			      PPE_FLOW_E_NEW_PORT_LEN, ntohs(data->sport_new));
@@ -2208,6 +2341,34 @@ static int ppe_flow_reject(struct qca_ppe_priv *priv, enum ppe_flow_reject why)
 	return -EOPNOTSUPP;
 }
 
+static int ppe_flow_resolve_mtu(struct ppe_flow_data *data, unsigned long cookie)
+{
+	const struct flow_offload_tuple *tuple = (void *)cookie;
+	struct net_device *dev, *mtu_dev;
+
+	switch (tuple->xmit_type) {
+	case FLOW_OFFLOAD_XMIT_DIRECT:
+		data->l3if = tuple->out.ifidx;
+		break;
+	case FLOW_OFFLOAD_XMIT_NEIGH:
+		data->l3if = tuple->ifidx;
+		break;
+	default:
+		return -EOPNOTSUPP;
+	}
+	scoped_guard(rcu) {
+		dev = dev_get_by_index_rcu(dev_net(data->odev), data->l3if);
+		if (!dev)
+			return -ENODEV;
+		mtu_dev = dev_get_by_index_rcu(dev_net(data->odev), tuple->mtu_ifindex);
+		if (!mtu_dev || READ_ONCE(mtu_dev->mtu) != tuple->mtu_device)
+			return -ESTALE;
+		data->mtu = min_t(u32, READ_ONCE(tuple->mtu), READ_ONCE(dev->mtu));
+	}
+	return data->mtu >= (data->addr_type == FLOW_DISSECTOR_KEY_IPV6_ADDRS ?
+			    1280 : 68) ? 0 : -EOPNOTSUPP;
+}
+
 static int ppe_flow_offload_replace(struct ppe_flow_block *fb,
 				    struct flow_cls_offload *f)
 {
@@ -2218,11 +2379,22 @@ static int ppe_flow_offload_replace(struct ppe_flow_block *fb,
 	struct ppe_flow_entry *entry;
 	struct ppe_flow_data data = {};
 	struct flow_action_entry *act;
-	bool snat, dnat, v6;
+	bool snat, dnat, v6, steer;
 	int i, ret, nfw, nhw, iport;
 
 	guard(mutex)(&priv->flow_lock);
 	guard(mutex)(&priv->vlan_lock);
+
+	{
+		const struct flow_offload_tuple *tuple = (void *)f->cookie;
+		struct flow_offload_tuple_rhash *th;
+		struct flow_offload *flow;
+
+		th = container_of(tuple, struct flow_offload_tuple_rhash, tuple);
+		flow = container_of(th, struct flow_offload, tuplehash[tuple->dir]);
+		if (test_bit(NF_FLOW_TEARDOWN, &flow->flags))
+			return -EOPNOTSUPP;
+	}
 
 	if (!flow_rule_match_key(rule, FLOW_DISSECTOR_KEY_META) ||
 	    !flow_rule_match_key(rule, FLOW_DISSECTOR_KEY_CONTROL) ||
@@ -2398,13 +2570,14 @@ static int ppe_flow_offload_replace(struct ppe_flow_block *fb,
 		data.dport = match.key->dst;
 	}
 
+	steer = ppe_flow_fw_carries(priv, data.odev);
 	data.v4_src_new = data.v4_src;
 	data.v4_dst_new = data.v4_dst;
 	data.sport_new = data.sport;
 	data.dport_new = data.dport;
 
 	flow_action_for_each(i, act, &rule->action) {
-		if (act->id != FLOW_ACTION_MANGLE)
+		if (steer || act->id != FLOW_ACTION_MANGLE)
 			continue;
 
 		switch (act->mangle.htype) {
@@ -2441,6 +2614,12 @@ static int ppe_flow_offload_replace(struct ppe_flow_block *fb,
 	if (v6 && (snat || dnat))
 		return ppe_flow_reject(priv, PPE_REJECT_NAT_IPV6);
 
+	ret = ppe_flow_resolve_mtu(&data, f->cookie);
+	if (ret) {
+		priv->flow_mtu_rejected++;
+		return ret;
+	}
+
 	entry = kzalloc(sizeof(*entry), GFP_KERNEL);
 	if (!entry)
 		return -ENOMEM;
@@ -2456,6 +2635,8 @@ static int ppe_flow_offload_replace(struct ppe_flow_block *fb,
 	entry->in_uplink = -1;
 	entry->session = -1;
 	entry->iport = iport;
+	entry->l3if = data.l3if;
+	entry->ip_mtu = data.mtu;
 
 	ret = ppe_flow_alloc_ingress(priv, iport, data.ivid, entry);
 	if (ret) {
@@ -2464,14 +2645,20 @@ static int ppe_flow_offload_replace(struct ppe_flow_block *fb,
 		goto err_free;
 	}
 
-	ret = ppe_flow_alloc_egress(priv, &data, snat, dnat, entry);
+	entry->steer = steer;
+	if (steer) {
+		entry->oport = QCA_PPE_CPU_PORT;
+		ret = 0;
+	} else {
+		ret = ppe_flow_alloc_egress(priv, &data, snat, dnat, entry);
+	}
 	if (ret) {
 		priv->flow_reject[ret == -ENOSPC ? PPE_REJECT_RESOURCE :
 				  PPE_REJECT_EGRESS_PORT]++;
 		goto err_ingress;
 	}
 
-	ppe_flow_encode(&data, v6, snat, dnat, entry->nexthop, entry->src_if,
+	ppe_flow_encode(&data, v6, snat, dnat, steer, entry->nexthop, entry->src_if,
 			fw, hw);
 
 	nfw = v6 ? PPE_FLOW_ENTRY_WORDS_V6 : PPE_FLOW_ENTRY_WORDS_V4;
@@ -2565,6 +2752,9 @@ static int ppe_flow_offload_stats(struct qca_ppe_priv *priv,
 				       ppe_flow_ht_params);
 	if (!entry)
 		return -ENOENT;
+	/* NSS supplies the counters for a direction handed over unchanged. */
+	if (entry->steer)
+		return 0;
 
 	/* The hit counter does not advance for every forwarding type, but any
 	 * hit rewinds the entry's age to its maximum while the hardware
@@ -2786,6 +2976,9 @@ static void ppe_sparse_work(struct work_struct *work)
 	list_for_each_entry(entry, &priv->flow_list, list) {
 		u64 bytes;
 
+		if (entry->steer)
+			continue;
+
 		regmap_read(priv->regmap, PPE_IN_FLOW_CNT_TBL(entry->index),
 			    &pkts);
 		delta = pkts - (u32)entry->packets;
@@ -2909,4 +3102,31 @@ void ppe_flow_offload_exit(struct qca_ppe_priv *priv)
 	for (i = 0; i < ARRAY_SIZE(priv->shaper_dev); i++)
 		if (priv->shaper_dev[i])
 			unregister_netdev(priv->shaper_dev[i]);
+}
+
+/* Per-row policy evidence; separate from the existing key/value statistics. */
+static int ppe_flow_mtu_show(struct seq_file *s, void *unused)
+{
+	struct qca_ppe_priv *priv = s->private;
+	struct ppe_flow_entry *entry;
+
+	guard(mutex)(&priv->flow_lock);
+	seq_puts(s, "index ingress_port egress_port logical_ifindex ip_mtu egress_ip_mtu wifi_steer\n");
+	list_for_each_entry(entry, &priv->flow_list, list)
+		seq_printf(s, "%u %u %u %d %u %u %u\n", entry->index,
+			   entry->iport, entry->oport, entry->l3if,
+			   entry->ip_mtu, entry->egress_mtu, entry->steer);
+	return 0;
+}
+DEFINE_SHOW_ATTRIBUTE(ppe_flow_mtu);
+
+void ppe_flow_mtu_debugfs_init(struct qca_ppe_priv *priv)
+{
+	debugfs_create_file("flow_mtu", 0400, priv->debugfs, priv,
+			    &ppe_flow_mtu_fops);
+}
+
+bool ppe_flow_logical_mtu_enabled(void)
+{
+	return ppe_logical_mtu_offload;
 }

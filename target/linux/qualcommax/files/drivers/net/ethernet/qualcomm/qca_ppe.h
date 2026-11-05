@@ -811,6 +811,8 @@
 #define   PPE_FLOW_E_SRC_IF_LEN		8
 #define   PPE_FLOW_E_FWD_TYPE_OFF	29
 #define   PPE_FLOW_E_FWD_TYPE_LEN	3
+#define   PPE_FLOW_E_PORT_OFF	32
+#define   PPE_FLOW_E_PORT_LEN	8
 #define   PPE_FLOW_E_NEXTHOP_OFF	32
 #define   PPE_FLOW_E_NEXTHOP_LEN	12
 #define   PPE_FLOW_E_NEW_PORT_OFF	44
@@ -1555,6 +1557,8 @@ struct qca_ppe_priv {
 	struct ppe_pppoe_session pppoe[PPE_PPPOE_SESSIONS];
 	u32 flow_reject[PPE_REJECT_MAX];
 	u32 flow_offloaded;
+	u32 flow_mtu_invalidated;
+	u32 flow_mtu_rejected;
 	u32 flow_reinstalled;
 	u32 flow_destroy_miss;
 	u32 flow_stale;
@@ -1566,6 +1570,9 @@ struct qca_ppe_priv {
 	 * holds none. Taken after flow_lock wherever both are needed.
 	 */
 	struct mutex vlan_lock;
+	struct mutex mtu_lock;
+	u32 port_frame_size[QCA_PPE_MAX_PORTS];
+	bool (__rcu *fw_carries)(int ifindex);
 	/* Free entries of every ACL hardware list. Guarded by its own lock
 	 * because the small-packet module parameters reach the table from a
 	 * writer that holds no rtnl.
@@ -1861,5 +1868,12 @@ int ppe_flow_shaper_set(struct qca_ppe_priv *priv, bool upload,
 #define PPE_XDEV_UL		BIT(30)
 void ppe_flow_purge_vsi(struct qca_ppe_priv *priv, u32 vsi);
 void ppe_flow_offload_exit(struct qca_ppe_priv *priv);
+
+
+void ppe_qm_pri_map_init(struct qca_ppe_priv *priv);
+void ppe_flow_qos_init(struct qca_ppe_priv *priv);
+void ppe_flow_excep_init(struct qca_ppe_priv *priv);
+void ppe_flow_mtu_debugfs_init(struct qca_ppe_priv *priv);
+bool ppe_flow_logical_mtu_enabled(void);
 
 #endif

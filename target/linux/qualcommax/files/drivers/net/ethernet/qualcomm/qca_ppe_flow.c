@@ -300,6 +300,10 @@ static int ppe_offload_show(struct seq_file *s, void *data)
 	guard(mutex)(&priv->flow_lock);
 
 	seq_printf(s, "%-24s %u\n", "offloaded", priv->flow_offloaded);
+	seq_printf(s, "%-24s %u\n", "mtu_invalidated", priv->flow_mtu_invalidated);
+	seq_printf(s, "%-24s %u\n", "mtu_rejected", priv->flow_mtu_rejected);
+	seq_printf(s, "%-24s %u\n", "logical_mtu_offload",
+		   ppe_flow_logical_mtu_enabled());
 	seq_printf(s, "%-24s %u\n", "reinstalled", priv->flow_reinstalled);
 	seq_printf(s, "%-24s %u\n", "destroy_miss", priv->flow_destroy_miss);
 	seq_printf(s, "%-24s %u\n", "stale", priv->flow_stale);
@@ -338,6 +342,7 @@ DEFINE_SHOW_ATTRIBUTE(ppe_offload);
 
 void ppe_flow_debugfs_init(struct qca_ppe_priv *priv)
 {
+	ppe_flow_mtu_debugfs_init(priv);
 	debugfs_create_file("flows", 0400, priv->debugfs, priv,
 			    &ppe_flows_fops);
 	debugfs_create_file("offload", 0400, priv->debugfs, priv,
@@ -370,7 +375,7 @@ static void ppe_flow_age_timer_set(struct qca_ppe_priv *priv, u32 *ctrl)
  * the table set. A pattern left at its reset value matches every TCP packet,
  * so the patterns are written before their exceptions are enabled.
  */
-static void ppe_flow_excep_init(struct qca_ppe_priv *priv)
+void ppe_flow_excep_init(struct qca_ppe_priv *priv)
 {
 	static const u8 rdt[] = {
 		0, 1, 2, 3,				/* L2 protocol, PPPoE */

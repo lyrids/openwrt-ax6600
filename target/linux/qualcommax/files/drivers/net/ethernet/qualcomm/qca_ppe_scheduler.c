@@ -3964,3 +3964,73 @@ int ppe_scheduler_ready(struct qca_ppe_priv *priv)
 	return devlink_params_register(priv->ds.devlink, ppe_params,
 				       ARRAY_SIZE(ppe_params));
 }
+
+void ppe_qm_pri_map_init(struct qca_ppe_priv *priv)
+{
+	int i, pri;
+
+	for (i = 0; i < PPE_NUM_PORTS; i++) {
+		for (pri = 0; pri < 16; pri++) {
+			/* Three bands per port. The hash offset is added to the
+			 * class for every packet, so a class must be as wide as
+			 * the spread or the smear crosses into the next, and
+			 * the third band is the second scheduler node's queues.
+			 * l0_port0[] and ppe_l0_scheduler_init() put each band
+			 * a strict priority above the one below, which is what
+			 * the small-frame classifier in the ACL needs to be
+			 * worth anything: without it every priority shares one
+			 * queue, and a frame on its way to a Wi-Fi client waits
+			 * behind whatever bulk that queue is holding.
+			 *
+			 * Priorities eight and up select the third band. No
+			 * classifier resolves there on its own - the DSCP and
+			 * PCP tables map below eight unless told otherwise -
+			 * so the band carries exactly the traffic a rule names
+			 * into it, and a shaper on it then governs that
+			 * traffic and nothing else (cpu_port_rate on the CPU
+			 * port).
+			 */
+			u8 cls = min(pri / PPE_FLOW_SPREAD_QUEUES, 2) *
+				 PPE_FLOW_SPREAD_QUEUES;
+
+			/* From PPE_QOS_SPARSE_PRI up: the fourth list, past
+			 * the three bands on a user port. The CPU port has
+			 * none - no flow entry egresses there - so a rule
+			 * that marks that high keeps the third band and its
+			 * shaper.
+			 */
+			if (i && pri >= PPE_QOS_SPARSE_PRI)
+				cls = 3 * PPE_FLOW_SPREAD_QUEUES;
+
+			if (i) {
+				regmap_write(priv->regmap,
+					     PPE_QM_UCAST_PRI_MAP(i * 16 + pri),
+					     FIELD_PREP(PPE_QM_PRI_CLASS, cls));
+				continue;
+			}
+
+			/* Profiles 0 and 15 both resolve to the CPU port. */
+			regmap_write(priv->regmap,
+				     PPE_QM_UCAST_PRI_MAP(pri),
+				     FIELD_PREP(PPE_QM_PRI_CLASS, cls));
+			regmap_write(priv->regmap,
+				     PPE_QM_UCAST_PRI_MAP(15 * 16 + pri),
+				     FIELD_PREP(PPE_QM_PRI_CLASS, cls));
+		}
+	}
+
+	/* Profiles no port uses add no offset. */
+	for (i = PPE_NUM_PORTS * 16; i < 15 * 16; i++)
+		regmap_write(priv->regmap, PPE_QM_UCAST_PRI_MAP(i), 0);
+}
+
+void ppe_flow_qos_init(struct qca_ppe_priv *priv)
+{
+	int i;
+
+	for (i = 1; i <= PPE_QOS_MAX_PRI; i++)
+		regmap_write(priv->regmap, PPE_FLOW_QOS_GROUP(0, i),
+			     FIELD_PREP(PPE_QOS_INFO_PRI, i));
+	regmap_write(priv->regmap, PPE_FLOW_QOS_GROUP(0, PPE_QOS_SPARSE_PRI),
+		     FIELD_PREP(PPE_QOS_INFO_PRI, PPE_QOS_SPARSE_PRI));
+}

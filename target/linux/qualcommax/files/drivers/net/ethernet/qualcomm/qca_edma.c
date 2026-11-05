@@ -26,6 +26,8 @@
 #include <net/dst_metadata.h>
 #include <net/netdev_queues.h>
 
+#include <linux/soc/qcom/qca_edma.h>
+
 #include "qca_edma.h"
 
 static void edma_irq_disable_all(struct edma_priv *priv)
@@ -1437,12 +1439,12 @@ static void edma_hw_reset(struct edma_priv *priv)
  * number modulo the queue count. Ring 0 is never given a base address here, so
  * a queue left pointing at it would deliver nowhere.
  */
-static void edma_qid2rid_set(struct edma_priv *priv)
+static void edma_qid2rid_set(struct edma_priv *priv, unsigned int queues)
 {
 	unsigned int i, j;
 	u32 val;
 
-	for (i = 0; i < EDMA_QID2RID_DEPTH; i++) {
+	for (i = 0; i < queues / EDMA_QID2RID_QUEUES_PER_ENTRY; i++) {
 		val = 0;
 		for (j = 0; j < EDMA_QID2RID_QUEUES_PER_ENTRY; j++) {
 			u32 qid = i * EDMA_QID2RID_QUEUES_PER_ENTRY + j;
@@ -1471,7 +1473,8 @@ static int edma_hw_init(struct edma_priv *priv)
 		for (i = 0; i < EDMA_RSS_QUEUES; i++)
 			priv->rss_indir[i] =
 				ethtool_rxfh_indir_default(i, priv->num_queues);
-	edma_qid2rid_set(priv);
+	edma_qid2rid_set(priv, EDMA_QID2RID_DEPTH *
+			  EDMA_QID2RID_QUEUES_PER_ENTRY);
 
 	ret = edma_rings_alloc(priv);
 	if (ret)
@@ -1519,6 +1522,24 @@ static int edma_hw_init(struct edma_priv *priv)
 	return 0;
 }
 
+/* A receive ring below the host's is enabled only by the NSS firmware, which
+ * shares this block. Rebuilding the rings resets the block and takes that ring
+ * down under it.
+ */
+static bool edma_shared(struct edma_priv *priv)
+{
+	u32 val;
+	int i;
+
+	for (i = 0; i <= priv->soc->rxdesc_ring - priv->max_queues; i++) {
+		regmap_read(priv->regmap, EDMA_REG_RXDESC_CTRL(i), &val);
+		if (val & EDMA_RXDESC_RX_EN)
+			return true;
+	}
+
+	return false;
+}
+
 static void edma_get_ringparam(struct net_device *netdev,
 			       struct ethtool_ringparam *ring,
 			       struct kernel_ethtool_ringparam *kernel_ring,
@@ -1563,23 +1584,35 @@ static int edma_set_ringparam(struct net_device *netdev,
 	    ring->rx_pending == priv->rx_ring_size)
 		return 0;
 
+	if (edma_shared(priv)) {
+		NL_SET_ERR_MSG_MOD(extack, "the NSS firmware shares the rings");
+		return -EBUSY;
+	}
+
 	return edma_reconfigure(priv, netdev->mtu, priv->num_queues,
 				ring->tx_pending, ring->rx_pending);
 }
 
-/* The rebuild asserts the block's reset line, so it is the DMA reset too. */
+/* The rebuild asserts the block's reset line, so it is the DMA reset too.
+ * While the NSS firmware shares the block, only a request for the shared
+ * component resets it.
+ */
 static int edma_reset(struct net_device *netdev, u32 *flags)
 {
 	struct edma_priv *priv = netdev_priv(netdev);
+	u32 shared = ETH_RESET_DMA << ETH_RESET_SHARED_SHIFT;
 	int ret;
 
-	if (!(*flags & ETH_RESET_DMA))
+	if (!(*flags & (ETH_RESET_DMA | shared)))
 		return -EINVAL;
+
+	if (!(*flags & shared) && edma_shared(priv))
+		return -EBUSY;
 
 	ret = edma_reconfigure(priv, netdev->mtu, priv->num_queues,
 			       priv->tx_ring_size, priv->rx_ring_size);
 	if (!ret)
-		*flags &= ~ETH_RESET_DMA;
+		*flags &= ~(ETH_RESET_DMA | shared);
 
 	return ret;
 }
@@ -1819,6 +1852,9 @@ static int edma_set_channels(struct net_device *netdev,
 	if (ch->combined_count == priv->num_queues)
 		return 0;
 
+	if (edma_shared(priv))
+		return -EBUSY;
+
 	return edma_reconfigure(priv, netdev->mtu, ch->combined_count,
 				priv->tx_ring_size, priv->rx_ring_size);
 }
@@ -1863,7 +1899,8 @@ static int edma_set_rxfh(struct net_device *netdev,
 
 	for (i = 0; i < EDMA_RSS_QUEUES; i++)
 		priv->rss_indir[i] = rxfh->indir[i];
-	edma_qid2rid_set(priv);
+	edma_qid2rid_set(priv, edma_shared(priv) ? EDMA_CPU_QUEUES :
+			  EDMA_QID2RID_DEPTH * EDMA_QID2RID_QUEUES_PER_ENTRY);
 
 	return 0;
 }
@@ -2193,6 +2230,51 @@ static int edma_irq_index(unsigned int queue, unsigned int which)
 		       (queue - 1) * EDMA_IRQS_PER_QUEUE + which : which;
 }
 
+/* Point every CPU-port queue back at the host receive ring while the NSS
+ * firmware runs. Once written, the table reads back unchanged for as long as
+ * the firmware runs.
+ */
+int qca_edma_cpu_queues_to_host(struct net_device *conduit)
+{
+	if (!conduit || conduit->netdev_ops != &edma_netdev_ops)
+		return -EINVAL;
+
+	edma_qid2rid_set(netdev_priv(conduit), EDMA_CPU_QUEUES);
+
+	return 0;
+}
+EXPORT_SYMBOL_GPL(qca_edma_cpu_queues_to_host);
+
+/* Point every CPU-port queue at receive ring @ring, one the NSS firmware
+ * drains. The firmware writes its own table and then enables its rings, so
+ * this waits for @ring to be enabled first.
+ */
+int qca_edma_cpu_queues_to_ring(struct net_device *conduit, unsigned int ring)
+{
+	struct edma_priv *priv;
+	unsigned int i;
+	u32 val;
+	int ret;
+
+	if (!conduit || conduit->netdev_ops != &edma_netdev_ops ||
+	    ring > EDMA_QID2RID_RING_MASK)
+		return -EINVAL;
+
+	priv = netdev_priv(conduit);
+	ret = regmap_read_poll_timeout(priv->regmap, EDMA_REG_RXDESC_CTRL(ring),
+				       val, val & EDMA_RXDESC_RX_EN,
+				       100, 5 * USEC_PER_SEC);
+	if (ret)
+		return ret;
+
+	for (i = 0; i < EDMA_CPU_QUEUES / EDMA_QID2RID_QUEUES_PER_ENTRY; i++)
+		regmap_write(priv->regmap, EDMA_QID2RID_TABLE_MEM(i),
+			     ring * 0x11111111);
+
+	return 0;
+}
+EXPORT_SYMBOL_GPL(qca_edma_cpu_queues_to_ring);
+
 static int edma_irq_init(struct edma_priv *priv)
 {
 	struct platform_device *pdev = priv->pdev;
@@ -2429,9 +2511,15 @@ static int edma_ndo_change_mtu(struct net_device *netdev, int new_mtu)
 	struct edma_priv *priv = netdev_priv(netdev);
 	int ret = 0;
 
-	if (edma_rx_frame_len(new_mtu) != priv->rx_frame_len)
+	if (edma_rx_frame_len(new_mtu) != priv->rx_frame_len) {
+		if (edma_shared(priv)) {
+			netdev_warn(netdev, "the NSS firmware shares the rings\n");
+			return -EBUSY;
+		}
+
 		ret = edma_reconfigure(priv, new_mtu, priv->num_queues,
 				       priv->tx_ring_size, priv->rx_ring_size);
+	}
 	if (!ret)
 		WRITE_ONCE(netdev->mtu, new_mtu);
 
