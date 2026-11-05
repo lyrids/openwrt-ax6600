@@ -1,0 +1,231 @@
+From: lyrids <ly7110@gmail.com>
+Subject: [PATCH] netfilter: invalidate flows on IPv6 protocol MTU changes
+
+Notify before/after changing IPv6 mtu6 without changing the link MTU.
+Permit hardware backends to veto unsafe transitions and retain a separate
+protocol-MTU snapshot for late admission. Extend the flowtable selftest.
+
+Signed-off-by: lyrids <ly7110@gmail.com>
+
+---
+
+diff --git a/include/linux/netdevice.h b/include/linux/netdevice.h
+--- a/include/linux/netdevice.h
++++ b/include/linux/netdevice.h
+@@ -3200,6 +3200,8 @@
+ 	NETDEV_OFFLOAD_XSTATS_REPORT_USED,
+ 	NETDEV_OFFLOAD_XSTATS_REPORT_DELTA,
+ 	NETDEV_XDP_FEAT_CHANGE,
++	NETDEV_PRECHANGEMTU6,	/* before IPv6 per-device MTU changes */
++	NETDEV_CHANGEMTU6,	/* after IPv6 per-device MTU changes */
+ };
+ const char *netdev_cmd_to_name(enum netdev_cmd cmd);
+ 
+diff --git a/net/core/dev.c b/net/core/dev.c
+--- a/net/core/dev.c
++++ b/net/core/dev.c
+@@ -1869,7 +1869,7 @@
+ 	N(SVLAN_FILTER_PUSH_INFO) N(SVLAN_FILTER_DROP_INFO)
+ 	N(PRE_CHANGEADDR) N(OFFLOAD_XSTATS_ENABLE) N(OFFLOAD_XSTATS_DISABLE)
+ 	N(OFFLOAD_XSTATS_REPORT_USED) N(OFFLOAD_XSTATS_REPORT_DELTA)
+-	N(XDP_FEAT_CHANGE)
++	N(XDP_FEAT_CHANGE) N(PRECHANGEMTU6) N(CHANGEMTU6)
+ 	}
+ #undef N
+ 	return "UNKNOWN_NETDEV_EVENT";
+diff --git a/net/core/rtnetlink.c b/net/core/rtnetlink.c
+--- a/net/core/rtnetlink.c
++++ b/net/core/rtnetlink.c
+@@ -7049,6 +7049,7 @@
+ 	switch (event) {
+ 	case NETDEV_REBOOT:
+ 	case NETDEV_CHANGEMTU:
++	case NETDEV_CHANGEMTU6:
+ 	case NETDEV_CHANGEADDR:
+ 	case NETDEV_CHANGENAME:
+ 	case NETDEV_FEAT_CHANGE:
+diff --git a/include/net/netfilter/nf_flow_table.h b/include/net/netfilter/nf_flow_table.h
+--- a/include/net/netfilter/nf_flow_table.h
++++ b/include/net/netfilter/nf_flow_table.h
+@@ -10,6 +10,7 @@
+ #include <linux/netfilter/nf_conntrack_tuple_common.h>
+ #include <net/flow_offload.h>
+ #include <net/dst.h>
++#include <net/addrconf.h>
+ #include <linux/if_pppox.h>
+ #include <linux/ppp_defs.h>
+ 
+@@ -143,6 +144,7 @@
+ 	u16				mtu;
+ 	u32				mtu_ifindex;
+ 	u32				mtu_device;
++	u32				mtu_protocol;
+ 	union {
+ 		struct {
+ 			struct dst_entry *dst_cache;
+@@ -199,6 +201,20 @@
+  * Callers hold RCU; this also covers a route resolved before a device change
+  * but published after the notifier's flowtable walk.
+  */
++/* Callers hold RCU. IPv6 has a separate administrative MTU even when
++ * net_device.mtu is unchanged. Keep it separate from learned route PMTU.
++ */
++static inline u32 flow_offload_protocol_mtu(const struct net_device *dev,
++					   u8 l3proto)
++{
++	if (IS_ENABLED(CONFIG_IPV6) && l3proto == NFPROTO_IPV6) {
++		struct inet6_dev *idev = __in6_dev_get(dev);
++
++		return idev ? READ_ONCE(idev->cnf.mtu6) : 0;
++	}
++	return READ_ONCE(dev->mtu);
++}
++
+ static inline bool flow_offload_mtu_valid(const struct flow_offload *flow,
+ 					 struct net *net)
+ {
+@@ -211,7 +227,9 @@
+ 		struct net_device *dev;
+ 
+ 		dev = dev_get_by_index_rcu(net, tuple->mtu_ifindex);
+-		if (!dev || READ_ONCE(dev->mtu) != tuple->mtu_device)
++		if (!dev || READ_ONCE(dev->mtu) != tuple->mtu_device ||
++		    flow_offload_protocol_mtu(dev, tuple->l3proto) !=
++		    tuple->mtu_protocol)
+ 			return false;
+ 	}
+ 	return true;
+diff --git a/net/netfilter/nf_flow_table_core.c b/net/netfilter/nf_flow_table_core.c
+--- a/net/netfilter/nf_flow_table_core.c
++++ b/net/netfilter/nf_flow_table_core.c
+@@ -103,6 +103,10 @@
+ 
+ 	flow_tuple->mtu_ifindex = dst->dev->ifindex;
+ 	flow_tuple->mtu_device = READ_ONCE(dst->dev->mtu);
++	rcu_read_lock();
++	flow_tuple->mtu_protocol =
++		flow_offload_protocol_mtu(dst->dev, flow_tuple->l3proto);
++	rcu_read_unlock();
+ 
+ 	switch (flow_tuple->l3proto) {
+ 	case NFPROTO_IPV4:
+@@ -112,6 +116,10 @@
+ 		flow_tuple->mtu = ip6_dst_mtu_maybe_forward(dst, true);
+ 		break;
+ 	}
++
++	/* Bound even an ABA change between snapshot and route calculation. */
++	flow_tuple->mtu = min_t(u32, flow_tuple->mtu,
++			       min(flow_tuple->mtu_device, flow_tuple->mtu_protocol));
+ 
+ 	flow_tuple->iifidx = route->tuple[dir].in.ifindex;
+ 	for (i = route->tuple[dir].in.num_encaps - 1; i >= 0; i--) {
+@@ -911,6 +919,8 @@
+ 	switch (event) {
+ 	case NETDEV_PRECHANGEMTU:
+ 	case NETDEV_CHANGEMTU:
++	case NETDEV_PRECHANGEMTU6:
++	case NETDEV_CHANGEMTU6:
+ 	case NETDEV_CHANGEUPPER:
+ 	case NETDEV_CHANGEADDR:
+ 	case NETDEV_DOWN:
+diff --git a/net/ipv6/addrconf.c b/net/ipv6/addrconf.c
+--- a/net/ipv6/addrconf.c
++++ b/net/ipv6/addrconf.c
+@@ -6379,13 +6379,35 @@
+ {
+ 	struct inet6_dev *idev = ctl->extra1;
+ 	int min_mtu = IPV6_MIN_MTU;
+-	struct ctl_table lctl;
+-
+-	lctl = *ctl;
++	struct ctl_table lctl = *ctl;
++	int value, ret;
++
++	if (!write) {
++		lctl.extra1 = &min_mtu;
++		lctl.extra2 = idev ? &idev->dev->mtu : NULL;
++		return proc_dointvec_minmax(&lctl, write, buffer, lenp, ppos);
++	}
++
++	rtnl_lock();
++	value = READ_ONCE(*(int *)ctl->data);
++	lctl.data = &value;
+ 	lctl.extra1 = &min_mtu;
+ 	lctl.extra2 = idev ? &idev->dev->mtu : NULL;
+-
+-	return proc_dointvec_minmax(&lctl, write, buffer, lenp, ppos);
++	ret = proc_dointvec_minmax(&lctl, write, buffer, lenp, ppos);
++	if (ret || value == READ_ONCE(*(int *)ctl->data))
++		goto out;
++	if (idev) {
++		ret = notifier_to_errno(call_netdevice_notifiers(
++					 NETDEV_PRECHANGEMTU6, idev->dev));
++		if (ret)
++			goto out;
++	}
++	WRITE_ONCE(*(int *)ctl->data, value);
++	if (idev)
++		call_netdevice_notifiers(NETDEV_CHANGEMTU6, idev->dev);
++out:
++	rtnl_unlock();
++	return ret;
+ }
+ 
+ static void dev_disable_change(struct inet6_dev *idev)
+diff --git a/tools/testing/selftests/net/netfilter/nft_flowtable_mtu.py b/tools/testing/selftests/net/netfilter/nft_flowtable_mtu.py
+--- a/tools/testing/selftests/net/netfilter/nft_flowtable_mtu.py
++++ b/tools/testing/selftests/net/netfilter/nft_flowtable_mtu.py
+@@ -99,15 +99,17 @@
+     root = Path(tempfile.mkdtemp(prefix="nft-flowtable-mtu-"))
+     records = []
+     failures = 0
+-    cases = [(layout, version, reverse)
++    cases = [(layout, version, reverse, mode)
+              for layout in ["native", "vlan", "bridge"]
+-             for version in [4, 6] for reverse in [False, True]]
++             for version in [4, 6] for reverse in [False, True]
++             for mode in (["link", "mtu6"] if version == 6 else ["link"])]
+     print("TAP version 13\n1.." + str(len(cases)), flush=True)
+-    for number, (layout, version, reverse) in enumerate(cases, 1):
++    for number, (layout, version, reverse, mode) in enumerate(cases, 1):
+         names = [prefix + suffix for suffix in ["a", "r", "b"]]
+         left, router, right = names
+         processes = []
+         label = layout + "-ipv" + str(version) + ("-reverse" if reverse else "-forward")
++        label += "-" + mode
+         details = {"case": label, "phases": []}
+         try:
+             for name in names:
+@@ -200,21 +202,28 @@
+                              if "seq" in r}
+                 response["delivered"] = len(set(response["sent"]) & delivered)
+                 return response
++            def change_mtu(value):
++                if mode == "mtu6":
++                    write_sysctl(router, "net/ipv6/conf/" + output + "/mtu", value)
++                    state = json.loads(ns(router, ["ip", "-j", "link", "show", output]))
++                    assert state[0]["mtu"] == 1500, ("Link MTU changed", state)
++                else:
++                    ns(router, ["ip", "link", "set", output, "mtu", str(value)])
+             large = 1500 - (28 if version == 4 else 48)
+             for mtu in [1492, 1400, 1280]:
+-                ns(router, ["ip", "link", "set", output, "mtu", "1500"])
++                change_mtu(1500)
+                 warm = probe(100, 10)
+                 assert warm["delivered"] == 10 and warm["replies"] >= 8, ("warm", warm)
+                 state = ns(router, ["cat", "/proc/net/nf_conntrack"])
+                 assert "OFFLOAD" in state, ("Flow not offloaded", state)
+-                ns(router, ["ip", "link", "set", output, "mtu", str(mtu)])
++                change_mtu(mtu)
+                 oversized = probe(large, 2)
+                 boundary = probe(mtu - (28 if version == 4 else 48), 2)
+                 phase = {"mtu": mtu, "warm_flow_offloaded": True,
+                          "oversized": oversized, "boundary": boundary}
+                 details["phases"].append(phase)
+                 assert boundary["delivered"] == 2, ("In-range delivery", phase)
+-            ns(router, ["ip", "link", "set", output, "mtu", "1500"])
++            change_mtu(1500)
+             restored = probe(large, 2)
+             details["restored"] = restored
+             assert restored["delivered"] == 2, ("Restored MTU", restored)
