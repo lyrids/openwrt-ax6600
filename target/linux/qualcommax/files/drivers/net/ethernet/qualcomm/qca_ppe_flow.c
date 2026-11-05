@@ -300,6 +300,8 @@ static int ppe_offload_show(struct seq_file *s, void *data)
 	guard(mutex)(&priv->flow_lock);
 
 	seq_printf(s, "%-24s %u\n", "offloaded", priv->flow_offloaded);
+	seq_printf(s, "%-24s %u\n", "offload_blocked", priv->flow_blocked);
+	seq_printf(s, "%-24s %u\n", "quarantined_rows", priv->flow_retired_count);
 	seq_printf(s, "%-24s %u\n", "mtu_invalidated", priv->flow_mtu_invalidated);
 	seq_printf(s, "%-24s %u\n", "mtu_rejected", priv->flow_mtu_rejected);
 	seq_printf(s, "%-24s %u\n", "logical_mtu_offload",

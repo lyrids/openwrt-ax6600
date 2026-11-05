@@ -3016,6 +3016,10 @@ int qca_ppe_fw_booted(struct net_device *conduit)
 	ppe_flow_qos_init(priv);
 	ppe_flow_excep_init(priv);
 	ppe_ports_mtu_write(priv);
+	/* Firmware boot must not reopen quarantined host flow resources. */
+	scoped_guard(mutex, &priv->flow_lock)
+		if (priv->flow_blocked)
+			regmap_update_bits(priv->regmap, PPE_FLOW_CTRL0, PPE_FLOW_EN, 0);
 
 	return 0;
 }
