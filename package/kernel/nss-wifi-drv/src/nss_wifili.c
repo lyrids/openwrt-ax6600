@@ -201,6 +201,17 @@ bool nss_wifili_owns(const struct net_device *dev)
 void nss_wifili_bind(struct nss_core *core)
 {
 	guard(mutex)(&nss_wifili_lock);
+	if (!core && nss_wifili_core) {
+		int i;
+
+		nss_core_quiesce(nss_wifili_core);
+		for (i = 0; i < ARRAY_SIZE(nss_wifili_socs); i++) {
+			WRITE_ONCE(nss_wifili_socs[i].desc.link_desc_return, NULL);
+			WRITE_ONCE(nss_wifili_socs[i].desc.rx_80211, NULL);
+			WRITE_ONCE(nss_wifili_socs[i].desc.peer_stats, NULL);
+		}
+		nss_rings_quiesce(nss_wifili_core);
+	}
 	nss_wifili_core = core;
 }
 
@@ -286,14 +297,16 @@ void nss_wifi_soc_unregister(int id)
 		scoped_guard(mutex, &core->lock)
 			nss_wifili_soc_stop(core, soc);
 	} else if (soc->started) {
+		/* A reported fault is not itself a hardware DMA barrier. */
+		nss_core_quiesce(core);
 		soc->started = false;
 		if (!nss_wifili_any_started()) {
 			nss_core_stop(core);
 			nss_wifili_forget(core);
 		}
-	} else {
-		nss_rings_quiesce(core);
 	}
+	/* No-vdev and not-last-SoC paths need the same callback barrier. */
+	nss_rings_quiesce(core);
 }
 EXPORT_SYMBOL_GPL(nss_wifi_soc_unregister);
 
@@ -1522,10 +1535,13 @@ int nss_wifi_peer_create(int id, u32 vdev_id, const u8 *mac, u16 peer_id,
 	pm.peer_memory_size = 0;
 
 	ret = nss_wifili_peer_msg(core, soc, NSS_WIFILI_PEER_CREATE_MSG, &pm);
-	if (ret) {
+	if (ret && ret != -ETIMEDOUT) {
 		dma_free_coherent(core->dev, size, mem, dma);
 		return ret;
 	}
+	/* A timed-out CREATE stopped NSS DMA, but WLAN may still hold
+	 * buffers from that lifetime. Keep this allocation for halted().
+	 */
 
 	/* What the hardware resolves a unicast frame against. A search index
 	 * or hash of zero is what an unmapped peer looks like, and a frame
@@ -1542,7 +1558,7 @@ int nss_wifi_peer_create(int id, u32 vdev_id, const u8 *mac, u16 peer_id,
 	nss_wifili_peer_tbl[i].dma = dma;
 	nss_wifili_peer_tbl[i].size = size;
 
-	return 0;
+	return ret;
 }
 EXPORT_SYMBOL_GPL(nss_wifi_peer_create);
 
@@ -1560,8 +1576,8 @@ static void nss_wifili_peer_release(struct nss_core *core, int i)
 	pm.peer_id = nss_wifili_peer_tbl[i].peer_id;
 	ret = nss_wifili_peer_msg(core, nss_wifili_peer_tbl[i].soc,
 				  NSS_WIFILI_PEER_DELETE_MSG, &pm);
-	/* -ENODEV is a core that is no longer running the record. */
-	if (ret && ret != -ENODEV) {
+	/* running=false alone is not proof all DMA owners have stopped. */
+	if (ret) {
 		dev_warn(core->dev, "peer %pM: delete failed: %d, record kept\n",
 			 nss_wifili_peer_tbl[i].mac, ret);
 		return;
@@ -2393,8 +2409,7 @@ static void nss_wifili_soc_stop(struct nss_core *core,
 	if (soc->started) {
 		ret = nss_wifili_soc_msg(core, soc, NSS_WIFILI_STOP_MSG, NULL, 0);
 		if (ret)
-			dev_warn(core->dev, "wifili %u: stop failed: %d\n",
-				 nss_wifili_soc_ifnum(soc), ret);
+			goto quarantine;
 	}
 
 	for (i = 0; i < ARRAY_SIZE(soc->radio_if); i++) {
@@ -2408,19 +2423,29 @@ static void nss_wifili_soc_stop(struct nss_core *core,
 		ret = nss_wifili_soc_msg(core, soc, NSS_WIFILI_PDEV_DEINIT_MSG,
 					 &d, sizeof(d));
 		if (ret)
-			dev_warn(core->dev, "wifili %u: radio %u deinit failed: %d\n",
-				 nss_wifili_soc_ifnum(soc), d.ifnum, ret);
+			goto quarantine;
 		nss_wifili_radio_free(core, soc, soc->radio_if[i]);
 		soc->radio_if[i] = -1;
 	}
 
 	ret = nss_wifili_soc_msg(core, soc, NSS_WIFILI_SOC_RESET_MSG, NULL, 0);
+	if (ret)
+		goto quarantine;
 	dev_info(core->dev, "wifili %u: stopped, reset rc %d\n",
 		 nss_wifili_soc_ifnum(soc), ret);
 
 	soc->started = false;
 	core->wifili_started = nss_wifili_any_started();
 	nss_wifili_txdesc_free(core, soc);
+	return;
+
+quarantine:
+	dev_warn(core->dev, "wifili %u: teardown failed %d, DMA stopped and memory retained\n",
+		 nss_wifili_soc_ifnum(soc), ret);
+	nss_core_quiesce(core);
+	soc->started = false;
+	core->wifili_started = nss_wifili_any_started();
+	nss_core_fault(core);
 }
 
 static int nss_wifili_soc_start(struct nss_core *core,

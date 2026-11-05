@@ -193,7 +193,8 @@ static bool nss_tx_reusable;
 module_param_named(tx_reusable, nss_tx_reusable, bool, 0644);
 MODULE_PARM_DESC(tx_reusable, "offer the firmware the buffer a frame arrives in");
 
-static int nss_lent_take(struct nss_core *core, struct sk_buff *skb);
+static int nss_lent_take(struct nss_core *core, struct sk_buff *skb,
+			 dma_addr_t dma, u64 *cookie);
 static void nss_lent_put(struct nss_core *core, u32 slot);
 
 static enum dma_data_direction nss_tx_dir(const struct sk_buff *skb)
@@ -231,9 +232,10 @@ int nss_data_send(struct nss_core *core, struct sk_buff *skb, u32 if_num,
 	struct h2n_descriptor *desc;
 	dma_addr_t dma;
 	u32 next, shift;
+	u64 cookie;
 	int slot, qid;
 
-	if (!core->running)
+	if (!READ_ONCE(core->running) || READ_ONCE(core->dma_quiesced))
 		return -ENODEV;
 
 	/* The firmware serves every data ring alike. One per flow keeps a
@@ -271,7 +273,7 @@ int nss_data_send(struct nss_core *core, struct sk_buff *skb, u32 if_num,
 		return -ENOMEM;
 
 	/* A transmitted buffer comes back once; the slot is what proves it. */
-	slot = nss_lent_take(core, skb);
+	slot = nss_lent_take(core, skb, dma, &cookie);
 	if (slot < 0) {
 		dma_unmap_single(core->dev, dma, skb_end_pointer(skb) - skb->head,
 				 dir);
@@ -313,7 +315,7 @@ int nss_data_send(struct nss_core *core, struct sk_buff *skb, u32 if_num,
 		if (skb->ip_summed == CHECKSUM_PARTIAL)
 			desc->bit_flags |= NSS_H2N_FLAG_GEN_IP_CHECKSUM |
 					   NSS_H2N_FLAG_GEN_L4_CHECKSUM;
-		desc->opaque = (uintptr_t)skb;
+		desc->opaque = cookie;
 
 		core->tx_posted++;
 
@@ -487,15 +489,14 @@ void nss_log_dump(struct nss_core *core, const char *why)
  * and reports where the payload landed, so what it is given is the head of
  * the allocation rather than the data pointer.
  */
-/* The buffers lent to the firmware, by a slot the socket buffer carries, so
- * that a halt can take back what is still out. A slot is released wherever the
- * count of buffers in firmware custody is, which is the same event: the buffer
- * has come home. A descriptor the firmware returned with a cookie this driver
- * cannot vouch for keeps its slot, because the buffer behind it is exactly
- * what must not be touched.
+/* A firmware cookie is an opaque slot/generation pair, never a pointer.
+ * Claim the host-owned record before inspecting the skb. A stale completion
+ * must not reach even skb->cb, including when two NAPI queues return it.
  */
-static int nss_lent_take(struct nss_core *core, struct sk_buff *skb)
+static int nss_lent_take(struct nss_core *core, struct sk_buff *skb,
+			 dma_addr_t dma, u64 *cookie)
 {
+	struct nss_lent_buffer *buf;
 	u32 slot;
 
 	guard(spinlock_bh)(&core->lent_lock);
@@ -504,33 +505,51 @@ static int nss_lent_take(struct nss_core *core, struct sk_buff *skb)
 		return -ENOSPC;
 
 	slot = core->lent_free[--core->lent_free_n];
-	core->lent[slot] = skb;
+	buf = &core->lent[slot];
+	/* Never wrap into the identity of an old completion. The slot stays
+	 * unavailable until a full firmware/ring reset starts a new lifetime.
+	 */
+	if (buf->generation == U32_MAX)
+		return -ENOSPC;
+	buf->generation++;
+	buf->dma = dma;
+	buf->skb = skb;
+	*cookie = (u64)buf->generation << 32 | slot;
 
 	return slot;
 }
 
-static bool nss_lent_claim(struct nss_core *core, u32 slot,
-			   struct sk_buff *skb)
+static struct sk_buff *nss_lent_claim(struct nss_core *core,
+				     const struct n2h_descriptor *desc)
 {
+	u32 slot = lower_32_bits(desc->opaque);
+	struct nss_lent_buffer *buf;
+	struct sk_buff *skb;
+
 	guard(spinlock_bh)(&core->lent_lock);
 
-	if (slot >= core->lent_size || core->lent[slot] != skb)
-		return false;
+	if (slot >= core->lent_size)
+		return NULL;
+	buf = &core->lent[slot];
+	if (!buf->skb || buf->generation != upper_32_bits(desc->opaque) ||
+	    buf->dma != desc->buffer)
+		return NULL;
 
-	core->lent[slot] = NULL;
+	skb = buf->skb;
+	buf->skb = NULL;
 	core->lent_free[core->lent_free_n++] = slot;
 
-	return true;
+	return skb;
 }
 
 static void nss_lent_put(struct nss_core *core, u32 slot)
 {
 	guard(spinlock_bh)(&core->lent_lock);
 
-	if (slot >= core->lent_size || !core->lent[slot])
+	if (slot >= core->lent_size || !core->lent[slot].skb)
 		return;
 
-	core->lent[slot] = NULL;
+	core->lent[slot].skb = NULL;
 	core->lent_free[core->lent_free_n++] = slot;
 }
 
@@ -539,7 +558,7 @@ static void nss_lent_reclaim(struct nss_core *core)
 	u32 i;
 
 	for (i = 0; i < core->lent_size; i++) {
-		struct sk_buff *skb = core->lent[i];
+		struct sk_buff *skb = core->lent[i].skb;
 
 		if (!skb)
 			continue;
@@ -602,6 +621,7 @@ static int nss_refill(struct nss_core *core, int budget)
 		struct h2n_descriptor *desc;
 		struct sk_buff *skb;
 		dma_addr_t dma;
+		u64 cookie;
 
 		if (atomic_read(&core->buffers_queued) + filled >= core->pool_size)
 			break;
@@ -627,7 +647,7 @@ static int nss_refill(struct nss_core *core, int budget)
 
 		NSS_SKB_CB(skb)->dma = dma;
 
-		ret = nss_lent_take(core, skb);
+		ret = nss_lent_take(core, skb, dma, &cookie);
 		if (ret < 0) {
 			dma_unmap_single(core->dev, dma, size, DMA_FROM_DEVICE);
 			kfree_skb(skb);
@@ -643,7 +663,7 @@ static int nss_refill(struct nss_core *core, int budget)
 		desc->buffer_type = NSS_H2N_BUFFER_EMPTY;
 		desc->bit_flags = 0;
 		desc->interface_num = 0;
-		desc->opaque = (uintptr_t)skb;
+		desc->opaque = cookie;
 
 		ring->hlos_index = next;
 		filled++;
@@ -663,10 +683,10 @@ static int nss_refill(struct nss_core *core, int budget)
 /* The firmware is up the first time it asks for buffers. */
 static void nss_check_booted(struct nss_core *core)
 {
-	if (core->running)
+	if (READ_ONCE(core->running) || READ_ONCE(core->dma_quiesced))
 		return;
 
-	core->running = true;
+	WRITE_ONCE(core->running, true);
 	complete(&core->booted);
 	dev_info(core->dev, "core %u booted\n", core->id);
 }
@@ -721,7 +741,7 @@ static int nss_poll_n2h(struct napi_struct *napi, int budget)
 
 	while (done < count) {
 		struct n2h_descriptor *desc = &ring->desc[ring->hlos_index];
-		struct sk_buff *skb = (struct sk_buff *)(uintptr_t)desc->opaque;
+		struct sk_buff *skb;
 
 		/* The message buffer comes back on this ring like everything
 		 * else, and is the host's own: it is answered rather than
@@ -731,29 +751,16 @@ static int nss_poll_n2h(struct napi_struct *napi, int budget)
 		if (desc->interface_num < NSS_INTERFACE_MAX)
 			core->rx_iface[desc->interface_num]++;
 
-		/* A returned descriptor is only safe to act on when the cookie
-		 * names an skb this driver lent AND that skb still records the
-		 * DMA address the descriptor carries. The firmware is the other
-		 * side of a trust boundary: a cookie that is a plausible but
-		 * wrong pointer skb_put()s into freed memory, and a DMA address
-		 * that is not the skb's unmaps a wild range - both from softirq,
-		 * both fatal. When the two disagree it cannot be told which is
-		 * the faithful field, so the only safe act is neither: leak the
-		 * one buffer, count it, and step over the slot. A message
-		 * completion carries no donated buffer and is handled first.
-		 */
 		if (!nss_msg_complete(core, desc)) {
-			bool ours = skb && virt_addr_valid((void *)skb) &&
-				    NSS_SKB_CB(skb)->dma == desc->buffer;
-
-			if (!ours) {
+			skb = nss_lent_claim(core, desc);
+			if (!skb) {
 				atomic64_inc(&core->rx_desync);
 				dev_warn_ratelimited(core->dev,
-						     "n2h: desync cookie %llx buf %x dma %llx type %u q %d - leaked\n",
-						     desc->opaque, desc->buffer,
-						     skb && virt_addr_valid((void *)skb) ?
-						     (u64)NSS_SKB_CB(skb)->dma : 0,
-						     desc->buffer_type, qid);
+					"n2h: invalid cookie %llx buffer %x type %u q %d\n",
+					desc->opaque, desc->buffer,
+					desc->buffer_type, qid);
+				goto next;
+			}
 			/* A buffer this driver transmitted comes back on the
 			 * same ring, and its descriptor still carries the
 			 * offset and length of the frame that was sent. Read
@@ -763,15 +770,7 @@ static int nss_poll_n2h(struct napi_struct *napi, int budget)
 			 * completion and nothing else, so it is claimed here
 			 * before any of it is believed.
 			 */
-			} else if (NSS_SKB_CB(skb)->tx) {
-				if (!nss_lent_claim(core, NSS_SKB_CB(skb)->slot, skb)) {
-					core->tx_dup++;
-					dev_warn_ratelimited(core->dev,
-							     "tx buffer returned twice: q %d type %u if %u\n",
-							     qid, desc->buffer_type,
-							     desc->interface_num);
-					goto next;
-				}
+			if (NSS_SKB_CB(skb)->tx) {
 				atomic64_inc(&core->tx_done);
 				/* A frame sent to a host-side node that the
 				 * firmware did not route comes back in its own
@@ -785,10 +784,6 @@ static int nss_poll_n2h(struct napi_struct *napi, int budget)
 				dev_kfree_skb_any(skb);
 			} else {
 				/* Before the stack owns the buffer and its cb. */
-				if (!nss_lent_claim(core, NSS_SKB_CB(skb)->slot, skb)) {
-					atomic64_inc(&core->rx_desync);
-					goto next;
-				}
 				atomic_dec(&core->buffers_queued);
 				if (nss_redir_recv(core, desc, skb) ||
 				    nss_mesh_recv(core, napi, desc, skb) ||

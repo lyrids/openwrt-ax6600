@@ -194,7 +194,13 @@ static int nss_msg_xact(struct nss_core *core, void *msg, size_t len,
 	if (!wait_for_completion_timeout(&core->msg.done, timeout)) {
 		dev_err(core->dev, "interface %u type %u: no answer in %u ms\n",
 			ncm->interface, ncm->type, NSS_MSG_TIMEOUT_MS);
+		/* A missing reply does not prove CREATE/DELETE never ran.
+		 * Stop DMA/rule forwarding before any caller can drop its
+		 * ownership record. Radio recovery reclaims memory later.
+		 */
 		core->msg.lost = true;
+		nss_core_quiesce_locked(core);
+		nss_core_fault(core);
 		return -ETIMEDOUT;
 	}
 

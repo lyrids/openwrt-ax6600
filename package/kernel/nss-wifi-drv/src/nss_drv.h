@@ -256,6 +256,12 @@ static_assert(offsetof(struct nss_cmn_msg, cb) == 24);
  * length describe what the firmware did with the buffer, not what the host
  * mapped - and unmapping by those is a partial unmap of a different range.
  */
+struct nss_lent_buffer {
+	struct sk_buff *skb;
+	dma_addr_t dma;
+	u32 generation;
+};
+
 struct nss_skb_cb {
 	dma_addr_t dma;
 	bool tx;	/* a frame handed down, not a buffer handed over */
@@ -378,6 +384,7 @@ struct nss_core {
 	u32 id;
 	bool loaded;
 	bool running;
+	bool dma_quiesced;
 	bool wifili_probed;
 	bool wifili_started;
 	bool mesh_capable;
@@ -448,7 +455,7 @@ struct nss_core {
 	 * so by the time it holds a poolful the descriptors that handed the
 	 * first ones over have been written many times since.
 	 */
-	struct sk_buff **lent;
+	struct nss_lent_buffer *lent;
 	u32 *lent_free;
 	u32 lent_free_n;
 	u32 lent_size;
@@ -467,6 +474,8 @@ int nss_wifi_pool_set(struct nss_core *core, u32 payloads);
 void nss_pbuf_pool_free(struct nss_core *core);
 void nss_core_stop(struct nss_core *core);
 void nss_core_fault(struct nss_core *core);
+void nss_core_quiesce(struct nss_core *core);
+void nss_core_quiesce_locked(struct nss_core *core);
 void nss_core_resume(struct nss_core *core);
 int nss_rings_start(struct nss_core *core);
 void nss_iface_bind(struct nss_core *core);

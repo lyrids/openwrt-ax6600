@@ -385,60 +385,8 @@ static int nss_mc_send6(struct nss_core *core, struct nss_mc_route *r,
 			const struct nss_mc_if *const *m, const u16 *flag,
 			int n, bool update)
 {
-	struct nss_ipv6_mc_rule_create_msg *c;
-	struct nss_ipv6_msg *msg __free(kfree) =
-		kzalloc(sizeof(*msg), GFP_KERNEL);
-	int i, ret;
-
-	if (!msg)
-		return -ENOMEM;
-	c = &msg->msg.mc_rule_create;
-
-	c->tuple.protocol = IPPROTO_UDP;
-	for (i = 0; i < 4; i++) {
-		c->tuple.flow_ip[i] = ntohl(r->src.ip6[i]);
-		c->tuple.return_ip[i] = ntohl(r->grp.ip6[i]);
-	}
-	c->tuple.flow_ident = ntohs(p->sport);
-	c->tuple.return_ident = ntohs(p->dport);
-
-	if (update)
-		c->rule_flags = NSS_IPV6_MC_RULE_CREATE_FLAG_MC_UPDATE;
-	c->src_interface_num = w->in.src;
-	c->ingress_vlan_tag[0] = w->in.vlan;
-	c->ingress_vlan_tag[1] = NSS_MC_VLAN_NONE;
-	if (w->in.vlan != NSS_MC_VLAN_NONE)
-		c->valid_flags |= NSS_IPV6_MC_RULE_CREATE_FLAG_INGRESS_VLAN_VALID;
-	if (w->in.pppoe)
-		c->valid_flags |= NSS_IPV6_MC_RULE_CREATE_FLAG_INGRESS_PPPOE;
-	memcpy(c->dest_mac, w->mac, ETH_ALEN);
-
-	c->if_count = n;
-	for (i = 0; i < n; i++) {
-		struct nss_ipv6_mc_if_rule *ir = &c->if_rule[i];
-
-		ir->rule_flags = NSS_IPV6_MC_RULE_CREATE_IF_FLAG_ROUTED_FLOW |
-				 flag[i];
-		ir->egress_vlan_tag[0] = m[i]->vlan;
-		ir->egress_vlan_tag[1] = NSS_MC_VLAN_NONE;
-		if (m[i]->vlan != NSS_MC_VLAN_NONE)
-			ir->valid_flags |= NSS_IPV6_MC_RULE_CREATE_IF_FLAG_VLAN_VALID;
-		ir->if_num = m[i]->ifnum;
-		ir->if_mtu = m[i]->mtu;
-		memcpy(ir->if_mac, m[i]->mac, ETH_ALEN);
-	}
-
-	msg->cm.interface = NSS_INTERFACE_IPV6;
-	msg->cm.type = NSS_IPV6_TX_CREATE_MC_RULE_MSG;
-	ret = nss_msg_send(core, msg, offsetof(struct nss_ipv6_msg, msg) +
-				      sizeof(*c));
-	if (msg->cm.error) {
-		nss_mc_last_err = msg->cm.error;
-		if (!ret)
-			ret = -EIO;
-	}
-
-	return ret;
+	/* Forwarded IPv6 must emit PTB, never fragment in the router. */
+	return -EOPNOTSUPP;
 }
 
 static int nss_mc_send(struct nss_core *core, struct nss_mc_route *r,
@@ -476,17 +424,20 @@ static int nss_mc_create(struct nss_core *core, struct nss_mc_route *r,
 	return ret;
 }
 
-static void nss_mc_destroy(struct nss_core *core, struct nss_mc_route *r,
+static int nss_mc_destroy(struct nss_core *core, struct nss_mc_route *r,
 			   struct nss_mc_port *p)
 {
-	int i;
+	int i, ret;
 
 	if (r->family == RTNL_FAMILY_IPMR) {
 		struct nss_ipv4_msg *m __free(kfree) =
 			kzalloc(sizeof(*m), GFP_KERNEL);
 
-		if (!m)
-			return;
+		if (!m) {
+			nss_core_quiesce(core);
+			nss_core_fault(core);
+			return -ENOMEM;
+		}
 		m->msg.rule_destroy.tuple.protocol = IPPROTO_UDP;
 		m->msg.rule_destroy.tuple.flow_ip = ntohl(r->src.ip);
 		m->msg.rule_destroy.tuple.flow_ident = ntohs(p->sport);
@@ -494,14 +445,17 @@ static void nss_mc_destroy(struct nss_core *core, struct nss_mc_route *r,
 		m->msg.rule_destroy.tuple.return_ident = ntohs(p->dport);
 		m->cm.interface = NSS_INTERFACE_IPV4;
 		m->cm.type = NSS_IPV4_TX_DESTROY_RULE_MSG;
-		nss_msg_send(core, m, offsetof(struct nss_ipv4_msg, msg) +
+		ret = nss_msg_send(core, m, offsetof(struct nss_ipv4_msg, msg) +
 				      sizeof(m->msg.rule_destroy));
 	} else {
 		struct nss_ipv6_msg *m __free(kfree) =
 			kzalloc(sizeof(*m), GFP_KERNEL);
 
-		if (!m)
-			return;
+		if (!m) {
+			nss_core_quiesce(core);
+			nss_core_fault(core);
+			return -ENOMEM;
+		}
 		m->msg.rule_destroy.tuple.protocol = IPPROTO_UDP;
 		for (i = 0; i < 4; i++) {
 			m->msg.rule_destroy.tuple.flow_ip[i] =
@@ -513,11 +467,17 @@ static void nss_mc_destroy(struct nss_core *core, struct nss_mc_route *r,
 		m->msg.rule_destroy.tuple.return_ident = ntohs(p->dport);
 		m->cm.interface = NSS_INTERFACE_IPV6;
 		m->cm.type = NSS_IPV6_TX_DESTROY_RULE_MSG;
-		nss_msg_send(core, m, offsetof(struct nss_ipv6_msg, msg) +
+		ret = nss_msg_send(core, m, offsetof(struct nss_ipv6_msg, msg) +
 				      sizeof(m->msg.rule_destroy));
 	}
 
+	if (ret) {
+		nss_core_quiesce(core);
+		nss_core_fault(core);
+		return ret;
+	}
 	nss_mc_destroyed++;
+	return 0;
 }
 
 static bool nss_mc_in_set(const struct nss_mc_set *s, const struct nss_mc_if *m)
@@ -576,14 +536,19 @@ static void nss_mc_mark(struct nss_mc_route *r, bool on)
 }
 
 /* Take every rule of @r out of the firmware, and the session with them. */
-static void nss_mc_withdraw(struct nss_core *core, struct nss_mc_route *r)
+static int nss_mc_withdraw(struct nss_core *core, struct nss_mc_route *r)
 {
+	int ret;
+
 	/* Pairs with the release in nss_mc_learn(). */
 	int i, n = smp_load_acquire(&r->nports);
 
 	for (i = 0; i < n; i++) {
-		if (r->port[i].installed && core)
-			nss_mc_destroy(core, r, &r->port[i]);
+		if (r->port[i].installed && core) {
+			ret = nss_mc_destroy(core, r, &r->port[i]);
+			if (ret)
+				return ret;
+		}
 		WRITE_ONCE(r->port[i].installed, false);
 	}
 	if (r->pppoe >= 0 && core)
@@ -591,6 +556,7 @@ static void nss_mc_withdraw(struct nss_core *core, struct nss_mc_route *r)
 	r->pppoe = -1;
 	memset(&r->cur, 0, sizeof(r->cur));
 	nss_mc_mark(r, false);
+	return 0;
 }
 
 static void nss_mc_sync(struct nss_core *core, struct nss_mc_route *r)
@@ -605,8 +571,10 @@ static void nss_mc_sync(struct nss_core *core, struct nss_mc_route *r)
 
 	r->why = nss_mc_want(core, r, w);
 	if (r->why || memcmp(&w->in, &r->cur.in, sizeof(w->in)) ||
-	    !ether_addr_equal(w->mac, r->cur.mac))
-		nss_mc_withdraw(core, r);
+	    !ether_addr_equal(w->mac, r->cur.mac)) {
+		if (nss_mc_withdraw(core, r))
+			return;
+	}
 	if (r->why || !n)
 		return;
 
@@ -627,7 +595,8 @@ static void nss_mc_sync(struct nss_core *core, struct nss_mc_route *r)
 		struct nss_mc_port *p = &r->port[i];
 
 		if (p->installed && nss_mc_update(core, r, p, w)) {
-			nss_mc_destroy(core, r, p);
+			if (nss_mc_destroy(core, r, p))
+				return;
 			WRITE_ONCE(p->installed, false);
 		}
 		if (!p->installed)
@@ -1059,6 +1028,48 @@ void nss_mc_print(struct seq_file *s)
 	}
 }
 
+static int nss_mc_netdev_event(struct notifier_block *nb,
+			       unsigned long event, void *ptr)
+{
+	struct net_device *dev = netdev_notifier_info_to_dev(ptr);
+	struct nss_mc_route *r;
+	int ret = 0;
+
+	if (!net_eq(dev_net(dev), &init_net))
+		return NOTIFY_DONE;
+	switch (event) {
+	case NETDEV_PRECHANGEMTU:
+	case NETDEV_CHANGEMTU:
+	case NETDEV_PRECHANGEMTU6:
+	case NETDEV_CHANGEMTU6:
+	case NETDEV_CHANGEUPPER:
+	case NETDEV_DOWN:
+	case NETDEV_UNREGISTER:
+		break;
+	default:
+		return NOTIFY_DONE;
+	}
+	/* Withdraw all multicast dependencies, including hidden uppers.
+	 * The worker takes RTNL and cannot readmit during the transition.
+	 */
+	scoped_guard(mutex, &nss_mc_lock) {
+		list_for_each_entry(r, &nss_mc_routes, node) {
+			ret = nss_mc_withdraw(nss_mc_core, r);
+			if (ret)
+				break;
+		}
+	}
+	schedule_work(&nss_mc_work);
+	if (ret && (event == NETDEV_PRECHANGEMTU ||
+		    event == NETDEV_PRECHANGEMTU6))
+		return notifier_from_errno(ret);
+	return NOTIFY_DONE;
+}
+
+static struct notifier_block nss_mc_netdev_nb = {
+	.notifier_call = nss_mc_netdev_event,
+};
+
 static void nss_mc_drain(void)
 {
 	struct nss_mc_event *ev, *etmp;
@@ -1100,9 +1111,14 @@ int nss_mc_init(void)
 				    nss_mc_fib_flush, NULL);
 	if (ret)
 		goto hooks;
+	ret = register_netdevice_notifier(&nss_mc_netdev_nb);
+	if (ret)
+		goto fib;
 
 	return 0;
 
+fib:
+	unregister_fib_notifier(&init_net, &nss_mc_fib_nb);
 hooks:
 	nf_unregister_net_hooks(&init_net, nss_mc_hook_ops, NSS_MC_NHOOKS);
 switchdev:
@@ -1115,6 +1131,7 @@ switchdev:
 /* The core is already unbound and halted, so nothing is sent. */
 void nss_mc_exit(void)
 {
+	unregister_netdevice_notifier(&nss_mc_netdev_nb);
 	unregister_fib_notifier(&init_net, &nss_mc_fib_nb);
 	nf_unregister_net_hooks(&init_net, nss_mc_hook_ops, NSS_MC_NHOOKS);
 	unregister_switchdev_blocking_notifier(&nss_mc_switchdev_nb);

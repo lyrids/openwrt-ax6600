@@ -1025,8 +1025,11 @@ static int nss_flow_withdraw_checked(struct nss_core *core,
 	if (e->v6) {
 		struct nss_ipv6_msg *m __free(kfree) = kzalloc(sizeof(*m), GFP_KERNEL);
 
-		if (!m)
+		if (!m) {
+			nss_core_quiesce(core);
+			nss_core_fault(core);
 			return -ENOMEM;
+		}
 		m->msg.rule_destroy.tuple = e->t6;
 		m->cm.interface = NSS_INTERFACE_IPV6;
 		m->cm.type = NSS_IPV6_TX_DESTROY_RULE_MSG;
@@ -1039,8 +1042,11 @@ static int nss_flow_withdraw_checked(struct nss_core *core,
 	} else {
 		struct nss_ipv4_msg *m __free(kfree) = kzalloc(sizeof(*m), GFP_KERNEL);
 
-		if (!m)
+		if (!m) {
+			nss_core_quiesce(core);
+			nss_core_fault(core);
 			return -ENOMEM;
+		}
 		m->msg.rule_destroy.tuple = e->t4;
 		m->cm.interface = NSS_INTERFACE_IPV4;
 		m->cm.type = NSS_IPV4_TX_DESTROY_RULE_MSG;
@@ -1053,6 +1059,10 @@ static int nss_flow_withdraw_checked(struct nss_core *core,
 	}
 	if (!ret)
 		e->installed = false;
+	else {
+		nss_core_quiesce(core);
+		nss_core_fault(core);
+	}
 	return ret;
 }
 
@@ -1576,6 +1586,8 @@ static int nss_flow_netdev_event(struct notifier_block *nb,
 	switch (event) {
 	case NETDEV_PRECHANGEMTU:
 	case NETDEV_CHANGEMTU:
+	case NETDEV_PRECHANGEMTU6:
+	case NETDEV_CHANGEMTU6:
 	case NETDEV_CHANGEUPPER:
 	case NETDEV_CHANGEADDR:
 	case NETDEV_DOWN:
@@ -1588,7 +1600,7 @@ static int nss_flow_netdev_event(struct notifier_block *nb,
 	core = nss_flow_core;
 	if (!core || !core->running)
 		return NOTIFY_DONE;
-	if (event == NETDEV_PRECHANGEMTU) {
+	if ((event == NETDEV_PRECHANGEMTU || event == NETDEV_PRECHANGEMTU6)) {
 		ret = nss_flow_retry_retired(core);
 		if (ret)
 			return notifier_from_errno(ret);
@@ -1634,11 +1646,13 @@ static int nss_flow_netdev_event(struct notifier_block *nb,
 		nss_flow_forget(core, e);
 		nss_flow_mtu_invalidated++;
 	}
-	if (event == NETDEV_CHANGEMTU ||
-	    (event == NETDEV_PRECHANGEMTU && ret))
+	if ((event == NETDEV_CHANGEMTU || event == NETDEV_CHANGEMTU6) ||
+	    ((event == NETDEV_PRECHANGEMTU || event == NETDEV_PRECHANGEMTU6) && ret))
 		nss_flow_reconfig = false;
-	return ret && event == NETDEV_PRECHANGEMTU ? notifier_from_errno(ret) :
-		NOTIFY_DONE;
+	if (ret && (event == NETDEV_PRECHANGEMTU ||
+		    event == NETDEV_PRECHANGEMTU6))
+		return notifier_from_errno(ret);
+	return NOTIFY_DONE;
 }
 
 static struct notifier_block nss_flow_netdev_nb = {

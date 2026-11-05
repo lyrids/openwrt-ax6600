@@ -446,32 +446,47 @@ static void nss_core_release(struct nss_core *core)
  * the state a cold boot left it in. Idempotent: a core that is not loaded has
  * nothing to put back.
  */
-static void nss_core_halt(struct nss_core *core)
+/* Stop firmware DMA without reclaiming memory borrowed by WLAN hardware.
+ * Full reclamation still waits for every radio to unregister. The message
+ * mutex also prevents a timed-out command buffer from being reused meanwhile.
+ */
+void nss_core_quiesce_locked(struct nss_core *core)
 {
 	u32 val;
 
+	lockdep_assert_held(&core->msg.lock);
+	WRITE_ONCE(core->running, false);
+	WRITE_ONCE(core->dma_quiesced, true);
+	if (!core->loaded)
+		return;
+
+	qca_edma_cpu_queues_to_host(core->conduit);
+	writel(1, core->nphys + NSS_CORE_RESET_CTRL);
+	readl(core->nphys + NSS_CORE_RESET_CTRL);
+	val = readl(core->misc_reset);
+	val |= NSS_MISC_RESET_SECOND << NSS_MISC_RESET_SHIFT(core->id);
+	writel(val, core->misc_reset);
+	usleep_range(10, 20);
+	val |= NSS_MISC_RESET_FIRST << NSS_MISC_RESET_SHIFT(core->id);
+	writel(val, core->misc_reset);
+	readl(core->misc_reset);
+}
+
+void nss_core_quiesce(struct nss_core *core)
+{
+	guard(mutex)(&core->msg.lock);
+	nss_core_quiesce_locked(core);
+}
+
+static void nss_core_halt(struct nss_core *core)
+{
 	if (!core->loaded)
 		return;
 
 	nss_ethernet_stop(core->conduit);
 	qca_ppe_fw_carrier_set(core->conduit, NULL);
-	writel(1, core->nphys + NSS_CORE_RESET_CTRL);
-
-	val = readl(core->misc_reset);
-	val |= NSS_MISC_RESET_SECOND << NSS_MISC_RESET_SHIFT(core->id);
-	writel(val, core->misc_reset);
-
-	/* The same settle the release path needs between the two sets. */
-	usleep_range(10, 20);
-
-	val |= NSS_MISC_RESET_FIRST << NSS_MISC_RESET_SHIFT(core->id);
-	writel(val, core->misc_reset);
-
-	/* Wait out any message or frame already past its running check: the
-	 * rings and the lent table go below.
-	 */
 	scoped_guard(mutex, &core->msg.lock) {
-		core->running = false;
+		nss_core_quiesce_locked(core);
 		core->msg.lost = false;
 	}
 	synchronize_net();
@@ -496,11 +511,12 @@ static void nss_core_halt(struct nss_core *core)
 
 	nss_pbuf_pool_free(core);
 	nss_mem_free_all(core);
-	clk_bulk_disable_unprepare(NSS_CLK_OWN, &core->clks[NSS_CLK_FABRIC]);
-
+	scoped_guard(mutex, &core->msg.lock) {
+		WRITE_ONCE(core->loaded, false);
+		clk_bulk_disable_unprepare(NSS_CLK_OWN, &core->clks[NSS_CLK_FABRIC]);
+	}
 	core->wifili_probed = false;
 	core->wifili_started = false;
-	WRITE_ONCE(core->loaded, false);
 	wake_up_var(&core->loaded);
 }
 
@@ -857,6 +873,7 @@ static int nss_core_boot(struct nss_core *core)
 	if (ret)
 		goto free;
 
+	WRITE_ONCE(core->dma_quiesced, false);
 	ret = nss_rings_start(core);
 	if (ret)
 		goto free;
@@ -1482,11 +1499,11 @@ static void nss_remove(struct platform_device *pdev)
 {
 	struct nss_core *core = platform_get_drvdata(pdev);
 
+	WRITE_ONCE(core->up, false);
 	nss_wifili_bind(NULL);
 	nss_flow_bind(NULL);
 	nss_mc_bind(NULL);
 	debugfs_remove_recursive(core->debugfs);
-	WRITE_ONCE(core->up, false);
 	scoped_guard(mutex, &core->lock)
 		nss_core_halt(core);
 	nss_wifili_halted(core);
