@@ -1,0 +1,26 @@
+From: OpenWrt lab <lab@localhost>
+Subject: [PATCH] crypto: qat: avoid collision with the common field_get macro
+
+Keep the local extraction helper distinct from linux/bitfield.h.
+The expanded protocol profile enables QAT and exposes the name collision.
+
+--- a/drivers/crypto/intel/qat/qat_common/adf_pm_dbgfs_utils.c
++++ b/drivers/crypto/intel/qat/qat_common/adf_pm_dbgfs_utils.c
+@@ -11,7 +11,7 @@
+  * pm_scnprint_table(), making it not compile time constant, so the compile
+  * asserts from FIELD_GET() or u32_get_bits() won't be fulfilled.
+  */
+-#define field_get(_mask, _reg) (((_reg) & (_mask)) >> (ffs(_mask) - 1))
++#define qat_pm_field_get(_mask, _reg) (((_reg) & (_mask)) >> (ffs(_mask) - 1))
+ 
+ #define PM_INFO_MAX_KEY_LEN	21
+ 
+@@ -30,7 +30,7 @@
+ 			string_upper(key, table[i].key);
+ 
+ 		wr += scnprintf(&buff[wr], buff_size - wr, "%s: %#x\n", key,
+-				field_get(table[i].field_mask,
++				qat_pm_field_get(table[i].field_mask,
+ 					  pm_info_regs[table[i].reg_offset]));
+ 	}
+ 
