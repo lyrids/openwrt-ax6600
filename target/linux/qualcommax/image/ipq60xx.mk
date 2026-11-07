@@ -110,7 +110,7 @@ define Device/jdcloud_re-cs-02
 	DEVICE_MODEL := RE-CS-02
 	SOC := ipq6010
 	BLOCKSIZE := 64k
-	KERNEL_SIZE := 6144k
+	KERNEL_SIZE := 16384k
 	DEVICE_DTS_CONFIG := config@cp03-c3
 	DEVICE_PACKAGES := ath11k-firmware-qcn9074 ipq-wifi-jdcloud_re-cs-02 kmod-ath11k-pci
 endef
