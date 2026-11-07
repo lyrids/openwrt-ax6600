@@ -1190,10 +1190,13 @@ endef
 
 TCP_BBR_SYSCTL_CONF:=sysctl-tcp-bbr.conf
 
+# The broad lab module profile provides BBR without changing the TCP default.
+ifneq ($(CONFIG_PACKAGE_kmod-network-protocol-extras),y)
 define KernelPackage/tcp-bbr/install
 	$(INSTALL_DIR) $(1)/etc/sysctl.d
 	$(INSTALL_DATA) ./files/$(TCP_BBR_SYSCTL_CONF) $(1)/etc/sysctl.d/12-tcp-bbr.conf
 endef
+endif
 
 $(eval $(call KernelPackage,tcp-bbr))
 
