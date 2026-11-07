@@ -729,6 +729,7 @@ define KernelPackage/dsa
   DEPENDS:=+kmod-mdio-devres +kmod-net-selftests +kmod-phylink
   KCONFIG:=CONFIG_NET_DSA
   FILES:=$(LINUX_DIR)/net/dsa/dsa_core.ko
+  DEPENDS+=+PACKAGE_kmod-protocol-extra-hsr:kmod-protocol-extra-hsr
 endef
 
 define KernelPackage/dsa/description
