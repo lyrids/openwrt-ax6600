@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
 include $(INCLUDE_DIR)/kernel.mk
 
 PKG_NAME:=nss-wifi-drv
-PKG_RELEASE:=2
+PKG_RELEASE:=3
 PKG_LICENSE:=GPL-2.0-only
 
 include $(INCLUDE_DIR)/package.mk
@@ -13,7 +13,9 @@ define KernelPackage/nss-wifi-drv
   SUBMENU:=Network Devices
   TITLE:=NSS firmware host driver for the Wi-Fi data plane
   DEPENDS:=@(TARGET_qualcommax_ipq807x||TARGET_qualcommax_ipq60xx) \
-	+nss-firmware +kmod-nft-bridge +kmod-nf-flow
+	+nss-firmware +kmod-nft-bridge +kmod-nf-flow \
+	+PACKAGE_kmod-dsa:kmod-dsa \
+	+PACKAGE_kmod-protocol-extra-qca-ppe:kmod-protocol-extra-qca-ppe
   FILES:=$(PKG_BUILD_DIR)/nss-wifi-drv.ko
 endef
 
