@@ -296,141 +296,171 @@ define KernelPackage/network-protocol-extras
 	CONFIG_WIREGUARD \
 	CONFIG_X25 \
 	CONFIG_XFRM_USER
+  DEPENDS:=+kmod-6lowpan +kmod-9pnet +kmod-appletalk +kmod-asn1-decoder +kmod-atm +kmod-bluetooth +kmod-bonding +kmod-br-netfilter +kmod-can +kmod-crypto-acompress +kmod-crypto-aead +kmod-crypto-authenc +kmod-crypto-blake2b +kmod-crypto-cbc +kmod-crypto-ccm +kmod-crypto-chacha20poly1305 +kmod-crypto-cmac +kmod-crypto-crc32 +kmod-crypto-crc32c +kmod-crypto-ctr +kmod-crypto-cts +kmod-crypto-deflate +kmod-crypto-des +kmod-crypto-ecb +kmod-crypto-ecdh +kmod-crypto-echainiv +kmod-crypto-essiv +kmod-crypto-fcrypt +kmod-crypto-gcm +kmod-crypto-geniv +kmod-crypto-gf128 +kmod-crypto-ghash +kmod-crypto-hash +kmod-crypto-hmac +kmod-crypto-hw-atmel +kmod-crypto-kpp +kmod-crypto-krb5 +kmod-crypto-lib-chacha20 +kmod-crypto-lib-chacha20poly1305 +kmod-crypto-lib-curve25519 +kmod-crypto-lib-poly1305 +kmod-crypto-manager +kmod-crypto-md4 +kmod-crypto-md5 +kmod-crypto-michael-mic +kmod-crypto-null +kmod-crypto-pcbc +kmod-crypto-rmd160 +kmod-crypto-rng +kmod-crypto-seqiv +kmod-crypto-sha1 +kmod-crypto-sha256 +kmod-crypto-sha3 +kmod-crypto-sha512 +kmod-crypto-test +kmod-crypto-user +kmod-crypto-xcbc +kmod-crypto-xxhash +kmod-dnsresolver +kmod-dsa +kmod-dsa-b53 +kmod-dsa-mv88e6060 +kmod-dsa-mv88e6xxx +kmod-dsa-mxl862xx +kmod-dsa-notag +kmod-dsa-realtek +kmod-dsa-rtl8365mb +kmod-dsa-rtl8366rb +kmod-dsa-vsc73xx +kmod-dummy +kmod-fixed-phy +kmod-fou +kmod-fs-afs +kmod-fs-cifs +kmod-fs-exportfs +kmod-fs-ext4 +kmod-fs-ksmbd +kmod-fs-netfs +kmod-fs-nfs +kmod-fs-nfs-common +kmod-fs-nfs-common-rpcsec +kmod-fs-nfsd +kmod-fs-smbfs-common +kmod-geneve +kmod-gre +kmod-hid +kmod-hwmon-core +kmod-i2c-core +kmod-ieee802154 +kmod-ifb +kmod-inet-diag +kmod-input-core +kmod-ip-vti +kmod-ip6-tunnel +kmod-ip6-vti +kmod-ipip +kmod-ipsec +kmod-ipsec4 +kmod-ipsec6 +kmod-ipt-conntrack +kmod-ipt-core +kmod-ipt-ipset +kmod-iptunnel +kmod-iptunnel4 +kmod-iptunnel6 +kmod-ipvlan +kmod-l2tp +kmod-leds-gpio +kmod-lib-842 +kmod-lib-cordic +kmod-lib-crc-ccitt +kmod-lib-crc16 +kmod-lib-crc7 +kmod-lib-lz4 +kmod-lib-lz4-decompress +kmod-lib-lz4hc +kmod-lib-textsearch +kmod-lib-xxhash +kmod-lib-zlib-deflate +kmod-lib-zlib-inflate +kmod-libphy +kmod-macsec +kmod-macvlan +kmod-mdio-devres +kmod-mhi-bus +kmod-mhi-net +kmod-mppe +kmod-net-selftests +kmod-netconsole +kmod-netem +kmod-netlink-diag +kmod-nf-conncount +kmod-nf-conntrack +kmod-nf-conntrack-netlink +kmod-nf-dup-inet +kmod-nf-flow +kmod-nf-ipt +kmod-nf-ipt6 +kmod-nf-ipvs +kmod-nf-log +kmod-nf-nat +kmod-nf-nathelper +kmod-nf-nathelper-amanda +kmod-nf-nathelper-broadcast +kmod-nf-nathelper-h323 +kmod-nf-nathelper-irc +kmod-nf-nathelper-netbios +kmod-nf-nathelper-pptp +kmod-nf-nathelper-sane +kmod-nf-nathelper-sip +kmod-nf-nathelper-snmp +kmod-nf-nathelper-tftp +kmod-nf-reject +kmod-nf-reject6 +kmod-nf-socket +kmod-nf-tproxy +kmod-nfnetlink +kmod-nfnetlink-cttimeout +kmod-nfnetlink-log +kmod-nfnetlink-queue +kmod-nft-bridge +kmod-nft-connlimit +kmod-nft-core +kmod-nft-dup-inet +kmod-nft-fib +kmod-nft-nat +kmod-nft-netdev +kmod-nft-offload +kmod-nft-socket +kmod-nft-tproxy +kmod-nlmon +kmod-nls-base +kmod-nls-ucs2-utils +kmod-nls-utf8 +kmod-nsh +kmod-oid-registry +kmod-packet-diag +kmod-phy-marvell +kmod-phy-maxlinear +kmod-phy-realtek +kmod-phy-vitesse +kmod-phylink +kmod-pktgen +kmod-polynomial +kmod-ppp +kmod-ppp-synctty +kmod-pppoe +kmod-pppox +kmod-pps +kmod-pstore +kmod-ptp +kmod-qrtr +kmod-qrtr-mhi +kmod-qrtr-smd +kmod-qrtr-tun +kmod-ramoops +kmod-random-core +kmod-reed-solomon +kmod-rfkill +kmod-rxrpc +kmod-sched +kmod-sched-act-gate +kmod-sched-act-pedit +kmod-sched-act-police +kmod-sched-act-sample +kmod-sched-act-vlan +kmod-sched-bpf +kmod-sched-cake +kmod-sched-cbs +kmod-sched-connmark +kmod-sched-core +kmod-sched-ctinfo +kmod-sched-drr +kmod-sched-dualpi2 +kmod-sched-etf +kmod-sched-ets +kmod-sched-flower +kmod-sched-gred +kmod-sched-mqprio +kmod-sched-mqprio-common +kmod-sched-pie +kmod-sched-prio +kmod-sched-red +kmod-sched-skbprio +kmod-sched-taprio +kmod-sctp +kmod-sit +kmod-slhc +kmod-slip +kmod-tcp-bbr +kmod-tcp-hybla +kmod-tcp-scalable +kmod-team +kmod-tls +kmod-tun +kmod-udptunnel4 +kmod-udptunnel6 +kmod-unix-diag +kmod-usb-common +kmod-usb-core +kmod-usb-dwc3 +kmod-usb-dwc3-qcom +kmod-usb-roles +kmod-usb-xhci-hcd +kmod-usb3 +kmod-veth +kmod-vrf +kmod-vsock +kmod-vxlan +kmod-wireguard
   FILES:=$(wildcard \
-	$(LINUX_DIR)/arch/arm/crypto/nhpoly1305-neon.ko \
-	$(LINUX_DIR)/arch/arm64/crypto/aes-arm64.ko \
-	$(LINUX_DIR)/arch/arm64/crypto/aes-ce-blk.ko \
-	$(LINUX_DIR)/arch/arm64/crypto/aes-ce-ccm.ko \
-	$(LINUX_DIR)/arch/arm64/crypto/aes-ce-cipher.ko \
-	$(LINUX_DIR)/arch/arm64/crypto/aes-neon-blk.ko \
-	$(LINUX_DIR)/arch/arm64/crypto/aes-neon-bs.ko \
-	$(LINUX_DIR)/arch/arm64/crypto/ghash-ce.ko \
-	$(LINUX_DIR)/arch/arm64/crypto/nhpoly1305-neon.ko \
-	$(LINUX_DIR)/arch/arm64/crypto/polyval-ce.ko \
 	$(LINUX_DIR)/arch/arm64/crypto/sha3-ce.ko \
-	$(LINUX_DIR)/arch/arm64/crypto/sm3-ce.ko \
 	$(LINUX_DIR)/arch/arm64/crypto/sm3-neon.ko \
-	$(LINUX_DIR)/arch/arm64/crypto/sm4-ce-ccm.ko \
+	$(LINUX_DIR)/arch/arm64/crypto/sm3-ce.ko \
 	$(LINUX_DIR)/arch/arm64/crypto/sm4-ce-cipher.ko \
-	$(LINUX_DIR)/arch/arm64/crypto/sm4-ce-gcm.ko \
 	$(LINUX_DIR)/arch/arm64/crypto/sm4-ce.ko \
+	$(LINUX_DIR)/arch/arm64/crypto/sm4-ce-ccm.ko \
+	$(LINUX_DIR)/arch/arm64/crypto/sm4-ce-gcm.ko \
 	$(LINUX_DIR)/arch/arm64/crypto/sm4-neon.ko \
+	$(LINUX_DIR)/arch/arm64/crypto/ghash-ce.ko \
+	$(LINUX_DIR)/arch/arm64/crypto/polyval-ce.ko \
+	$(LINUX_DIR)/arch/arm64/crypto/aes-ce-cipher.ko \
+	$(LINUX_DIR)/arch/arm64/crypto/aes-ce-ccm.ko \
+	$(LINUX_DIR)/arch/arm64/crypto/aes-ce-blk.ko \
+	$(LINUX_DIR)/arch/arm64/crypto/aes-neon-blk.ko \
+	$(LINUX_DIR)/arch/arm64/crypto/nhpoly1305-neon.ko \
+	$(LINUX_DIR)/arch/arm64/crypto/aes-arm64.ko \
+	$(LINUX_DIR)/arch/arm64/crypto/aes-neon-bs.ko \
+	$(LINUX_DIR)/fs/coda/coda.ko \
+	$(LINUX_DIR)/fs/nfs/nfsv3.ko \
+	$(LINUX_DIR)/fs/nfs/nfsv4.ko \
+	$(LINUX_DIR)/fs/nfs/filelayout/nfs_layout_nfsv41_files.ko \
+	$(LINUX_DIR)/fs/nfs/flexfilelayout/nfs_layout_flexfiles.ko \
+	$(LINUX_DIR)/fs/ceph/ceph.ko \
+	$(LINUX_DIR)/crypto/crypto_engine.ko \
+	$(LINUX_DIR)/crypto/dh_generic.ko \
+	$(LINUX_DIR)/crypto/rsa_generic.ko \
+	$(LINUX_DIR)/crypto/ecdsa_generic.ko \
+	$(LINUX_DIR)/crypto/sm3_generic.ko \
+	$(LINUX_DIR)/crypto/streebog_generic.ko \
+	$(LINUX_DIR)/crypto/wp512.ko \
+	$(LINUX_DIR)/crypto/lrw.ko \
+	$(LINUX_DIR)/crypto/xctr.ko \
+	$(LINUX_DIR)/crypto/hctr2.ko \
 	$(LINUX_DIR)/crypto/adiantum.ko \
+	$(LINUX_DIR)/crypto/nhpoly1305.ko \
 	$(LINUX_DIR)/crypto/aegis128.ko \
-	$(LINUX_DIR)/crypto/aes_ti.ko \
-	$(LINUX_DIR)/crypto/ansi_cprng.ko \
-	$(LINUX_DIR)/crypto/aria_generic.ko \
+	$(LINUX_DIR)/crypto/pcrypt.ko \
+	$(LINUX_DIR)/crypto/cryptd.ko \
 	$(LINUX_DIR)/crypto/blowfish_generic.ko \
+	$(LINUX_DIR)/crypto/blowfish_common.ko \
+	$(LINUX_DIR)/crypto/twofish_generic.ko \
+	$(LINUX_DIR)/crypto/twofish_common.ko \
+	$(LINUX_DIR)/crypto/serpent_generic.ko \
+	$(LINUX_DIR)/crypto/sm4.ko \
+	$(LINUX_DIR)/crypto/sm4_generic.ko \
+	$(LINUX_DIR)/crypto/aes_ti.ko \
 	$(LINUX_DIR)/crypto/camellia_generic.ko \
+	$(LINUX_DIR)/crypto/cast_common.ko \
 	$(LINUX_DIR)/crypto/cast5_generic.ko \
 	$(LINUX_DIR)/crypto/cast6_generic.ko \
-	$(LINUX_DIR)/crypto/chacha.ko \
-	$(LINUX_DIR)/crypto/cryptd.ko \
-	$(LINUX_DIR)/crypto/dh_generic.ko \
-	$(LINUX_DIR)/crypto/ecdsa_generic.ko \
+	$(LINUX_DIR)/crypto/aria_generic.ko \
+	$(LINUX_DIR)/crypto/ansi_cprng.ko \
+	$(LINUX_DIR)/crypto/polyval-generic.ko \
 	$(LINUX_DIR)/crypto/ecrdsa_generic.ko \
-	$(LINUX_DIR)/crypto/hctr2.ko \
-	$(LINUX_DIR)/crypto/lrw.ko \
-	$(LINUX_DIR)/crypto/pcrypt.ko \
-	$(LINUX_DIR)/crypto/serpent_generic.ko \
-	$(LINUX_DIR)/crypto/sm3_generic.ko \
-	$(LINUX_DIR)/crypto/sm4_generic.ko \
-	$(LINUX_DIR)/crypto/streebog_generic.ko \
-	$(LINUX_DIR)/crypto/twofish_generic.ko \
-	$(LINUX_DIR)/crypto/wp512.ko \
-	$(LINUX_DIR)/drivers/crypto/amlogic/amlogic-gxl-crypto.ko \
-	$(LINUX_DIR)/drivers/crypto/cavium/nitrox/n5pf.ko \
-	$(LINUX_DIR)/drivers/crypto/ccree/ccree.ko \
-	$(LINUX_DIR)/drivers/crypto/hisilicon/sec/hisi_sec.ko \
-	$(LINUX_DIR)/drivers/crypto/intel/qat/qat_420xx/qat_420xx.ko \
-	$(LINUX_DIR)/drivers/crypto/intel/qat/qat_4xxx/qat_4xxx.ko \
-	$(LINUX_DIR)/drivers/crypto/intel/qat/qat_c3xxx/qat_c3xxx.ko \
-	$(LINUX_DIR)/drivers/crypto/intel/qat/qat_c3xxxvf/qat_c3xxxvf.ko \
-	$(LINUX_DIR)/drivers/crypto/intel/qat/qat_c62x/qat_c62x.ko \
-	$(LINUX_DIR)/drivers/crypto/intel/qat/qat_c62xvf/qat_c62xvf.ko \
-	$(LINUX_DIR)/drivers/crypto/intel/qat/qat_dh895xcc/qat_dh895xcc.ko \
-	$(LINUX_DIR)/drivers/crypto/intel/qat/qat_dh895xccvf/qat_dh895xccvf.ko \
-	$(LINUX_DIR)/drivers/crypto/qce/qcrypto.ko \
-	$(LINUX_DIR)/drivers/crypto/virtio/virtio_crypto.ko \
-	$(LINUX_DIR)/drivers/dibs/dibs.ko \
-	$(LINUX_DIR)/drivers/net/amt.ko \
-	$(LINUX_DIR)/drivers/net/arcnet/arcnet.ko \
-	$(LINUX_DIR)/drivers/net/bareudp.ko \
-	$(LINUX_DIR)/drivers/net/eql.ko \
-	$(LINUX_DIR)/drivers/net/gtp.ko \
+	$(LINUX_DIR)/lib/math/prime_numbers.ko \
+	$(LINUX_DIR)/lib/crc/crc4.ko \
+	$(LINUX_DIR)/lib/crc/crc-t10dif.ko \
+	$(LINUX_DIR)/lib/crc/crc64.ko \
+	$(LINUX_DIR)/lib/crypto/mpi/mpi.ko \
+	$(LINUX_DIR)/lib/crypto/libsm3.ko \
+	$(LINUX_DIR)/drivers/net/ethernet/qualcomm/qca_ppe.ko \
 	$(LINUX_DIR)/drivers/net/ovpn/ovpn.ko \
+	$(LINUX_DIR)/drivers/net/eql.ko \
+	$(LINUX_DIR)/drivers/net/amt.ko \
+	$(LINUX_DIR)/drivers/net/virtio_net.ko \
+	$(LINUX_DIR)/drivers/net/bareudp.ko \
+	$(LINUX_DIR)/drivers/net/gtp.ko \
 	$(LINUX_DIR)/drivers/net/pfcp.ko \
+	$(LINUX_DIR)/drivers/net/arcnet/arcnet.ko \
 	$(LINUX_DIR)/drivers/net/ppp/bsd_comp.ko \
 	$(LINUX_DIR)/drivers/net/ppp/ppp_deflate.ko \
-	$(LINUX_DIR)/drivers/net/virtio_net.ko \
-	$(LINUX_DIR)/fs/ceph/ceph.ko \
-	$(LINUX_DIR)/fs/coda/coda.ko \
-	$(LINUX_DIR)/lib/crc/crc-t10dif.ko \
-	$(LINUX_DIR)/lib/crc/crc4.ko \
-	$(LINUX_DIR)/lib/crc/crc64.ko \
-	$(LINUX_DIR)/lib/math/prime_numbers.ko \
-	$(LINUX_DIR)/net/batman-adv/batman-adv.ko \
-	$(LINUX_DIR)/net/caif/caif.ko \
-	$(LINUX_DIR)/net/caif/caif_socket.ko \
-	$(LINUX_DIR)/net/ceph/libceph.ko \
+	$(LINUX_DIR)/drivers/net/net_failover.ko \
+	$(LINUX_DIR)/drivers/crypto/inside-secure/crypto_safexcel.ko \
+	$(LINUX_DIR)/drivers/crypto/hisilicon/sec/hisi_sec.ko \
+	$(LINUX_DIR)/drivers/crypto/intel/qat/qat_common/intel_qat.ko \
+	$(LINUX_DIR)/drivers/crypto/intel/qat/qat_dh895xcc/qat_dh895xcc.ko \
+	$(LINUX_DIR)/drivers/crypto/intel/qat/qat_c3xxx/qat_c3xxx.ko \
+	$(LINUX_DIR)/drivers/crypto/intel/qat/qat_c62x/qat_c62x.ko \
+	$(LINUX_DIR)/drivers/crypto/intel/qat/qat_4xxx/qat_4xxx.ko \
+	$(LINUX_DIR)/drivers/crypto/intel/qat/qat_420xx/qat_420xx.ko \
+	$(LINUX_DIR)/drivers/crypto/intel/qat/qat_dh895xccvf/qat_dh895xccvf.ko \
+	$(LINUX_DIR)/drivers/crypto/intel/qat/qat_c3xxxvf/qat_c3xxxvf.ko \
+	$(LINUX_DIR)/drivers/crypto/intel/qat/qat_c62xvf/qat_c62xvf.ko \
+	$(LINUX_DIR)/drivers/crypto/cavium/nitrox/n5pf.ko \
+	$(LINUX_DIR)/drivers/crypto/ccree/ccree.ko \
+	$(LINUX_DIR)/drivers/crypto/qce/qcrypto.ko \
+	$(LINUX_DIR)/drivers/crypto/virtio/virtio_crypto.ko \
+	$(LINUX_DIR)/drivers/crypto/amlogic/amlogic-gxl-crypto.ko \
+	$(LINUX_DIR)/drivers/dibs/dibs.ko \
 	$(LINUX_DIR)/net/core/failover.ko \
+	$(LINUX_DIR)/net/llc/llc2.ko \
+	$(LINUX_DIR)/net/sched/act_nat.ko \
+	$(LINUX_DIR)/net/sched/act_mpls.ko \
+	$(LINUX_DIR)/net/sched/act_ife.ko \
+	$(LINUX_DIR)/net/sched/act_tunnel_key.ko \
+	$(LINUX_DIR)/net/sched/act_ct.ko \
+	$(LINUX_DIR)/net/sched/sch_sfb.ko \
+	$(LINUX_DIR)/net/sched/sch_plug.ko \
+	$(LINUX_DIR)/net/sched/sch_choke.ko \
+	$(LINUX_DIR)/net/sched/sch_qfq.ko \
+	$(LINUX_DIR)/net/sched/sch_hhf.ko \
+	$(LINUX_DIR)/net/sched/cls_cgroup.ko \
+	$(LINUX_DIR)/net/netfilter/nfnetlink_acct.ko \
+	$(LINUX_DIR)/net/netfilter/nfnetlink_osf.ko \
+	$(LINUX_DIR)/net/netfilter/nfnetlink_hook.ko \
+	$(LINUX_DIR)/net/netfilter/nf_synproxy_core.ko \
+	$(LINUX_DIR)/net/netfilter/nft_reject_netdev.ko \
+	$(LINUX_DIR)/net/netfilter/nft_tunnel.ko \
+	$(LINUX_DIR)/net/netfilter/nft_fib_netdev.ko \
+	$(LINUX_DIR)/net/netfilter/nft_osf.ko \
+	$(LINUX_DIR)/net/netfilter/nft_synproxy.ko \
+	$(LINUX_DIR)/net/ipv4/tcp_bic.ko \
+	$(LINUX_DIR)/net/ipv4/tcp_cdg.ko \
+	$(LINUX_DIR)/net/ipv4/tcp_dctcp.ko \
+	$(LINUX_DIR)/net/ipv4/tcp_westwood.ko \
+	$(LINUX_DIR)/net/ipv4/tcp_highspeed.ko \
+	$(LINUX_DIR)/net/ipv4/tcp_htcp.ko \
+	$(LINUX_DIR)/net/ipv4/tcp_vegas.ko \
+	$(LINUX_DIR)/net/ipv4/tcp_nv.ko \
+	$(LINUX_DIR)/net/ipv4/tcp_veno.ko \
+	$(LINUX_DIR)/net/ipv4/tcp_lp.ko \
+	$(LINUX_DIR)/net/ipv4/tcp_yeah.ko \
+	$(LINUX_DIR)/net/ipv4/tcp_illinois.ko \
+	$(LINUX_DIR)/net/ipv6/mip6.ko \
+	$(LINUX_DIR)/net/ipv6/ila/ila.ko \
+	$(LINUX_DIR)/net/ipv6/fou6.ko \
 	$(LINUX_DIR)/net/dsa/tag_ar9331.ko \
+	$(LINUX_DIR)/net/dsa/tag_gswip.ko \
 	$(LINUX_DIR)/net/dsa/tag_hellcreek.ko \
 	$(LINUX_DIR)/net/dsa/tag_ksz.ko \
 	$(LINUX_DIR)/net/dsa/tag_lan9303.ko \
 	$(LINUX_DIR)/net/dsa/tag_mtk.ko \
 	$(LINUX_DIR)/net/dsa/tag_ocelot.ko \
 	$(LINUX_DIR)/net/dsa/tag_ocelot_8021q.ko \
+	$(LINUX_DIR)/net/dsa/tag_qca.ko \
 	$(LINUX_DIR)/net/dsa/tag_rzn1_a5psw.ko \
 	$(LINUX_DIR)/net/dsa/tag_sja1105.ko \
 	$(LINUX_DIR)/net/dsa/tag_xrs700x.ko \
 	$(LINUX_DIR)/net/dsa/tag_yt921x.ko \
 	$(LINUX_DIR)/net/dsa/tag_yt922x.ko \
-	$(LINUX_DIR)/net/hsr/hsr.ko \
-	$(LINUX_DIR)/net/ife/ife.ko \
-	$(LINUX_DIR)/net/ipv4/tcp_bic.ko \
-	$(LINUX_DIR)/net/ipv4/tcp_cdg.ko \
-	$(LINUX_DIR)/net/ipv4/tcp_dctcp.ko \
-	$(LINUX_DIR)/net/ipv4/tcp_highspeed.ko \
-	$(LINUX_DIR)/net/ipv4/tcp_htcp.ko \
-	$(LINUX_DIR)/net/ipv4/tcp_illinois.ko \
-	$(LINUX_DIR)/net/ipv4/tcp_lp.ko \
-	$(LINUX_DIR)/net/ipv4/tcp_nv.ko \
-	$(LINUX_DIR)/net/ipv4/tcp_vegas.ko \
-	$(LINUX_DIR)/net/ipv4/tcp_veno.ko \
-	$(LINUX_DIR)/net/ipv4/tcp_westwood.ko \
-	$(LINUX_DIR)/net/ipv4/tcp_yeah.ko \
-	$(LINUX_DIR)/net/ipv6/ila/ila.ko \
-	$(LINUX_DIR)/net/ipv6/mip6.ko \
-	$(LINUX_DIR)/net/kcm/kcm.ko \
+	$(LINUX_DIR)/net/mpls/mpls_gso.ko \
+	$(LINUX_DIR)/net/mptcp/mptcp_diag.ko \
+	$(LINUX_DIR)/net/x25/x25.ko \
 	$(LINUX_DIR)/net/lapb/lapb.ko \
-	$(LINUX_DIR)/net/llc/llc2.ko \
-	$(LINUX_DIR)/net/netfilter/nfnetlink_acct.ko \
-	$(LINUX_DIR)/net/netfilter/nfnetlink_hook.ko \
-	$(LINUX_DIR)/net/netfilter/nfnetlink_osf.ko \
-	$(LINUX_DIR)/net/netfilter/nft_fib_netdev.ko \
-	$(LINUX_DIR)/net/netfilter/nft_osf.ko \
-	$(LINUX_DIR)/net/netfilter/nft_reject_netdev.ko \
-	$(LINUX_DIR)/net/netfilter/nft_synproxy.ko \
-	$(LINUX_DIR)/net/netfilter/nft_tunnel.ko \
-	$(LINUX_DIR)/net/nfc/nfc.ko \
-	$(LINUX_DIR)/net/openvswitch/openvswitch.ko \
+	$(LINUX_DIR)/net/kcm/kcm.ko \
 	$(LINUX_DIR)/net/phonet/phonet.ko \
 	$(LINUX_DIR)/net/phonet/pn_pep.ko \
+	$(LINUX_DIR)/net/sctp/sctp_diag.ko \
 	$(LINUX_DIR)/net/rds/rds.ko \
-	$(LINUX_DIR)/net/sched/act_ct.ko \
-	$(LINUX_DIR)/net/sched/act_ife.ko \
-	$(LINUX_DIR)/net/sched/act_mpls.ko \
-	$(LINUX_DIR)/net/sched/act_nat.ko \
-	$(LINUX_DIR)/net/sched/act_tunnel_key.ko \
-	$(LINUX_DIR)/net/sched/cls_cgroup.ko \
-	$(LINUX_DIR)/net/sched/sch_choke.ko \
-	$(LINUX_DIR)/net/sched/sch_hhf.ko \
-	$(LINUX_DIR)/net/sched/sch_plug.ko \
-	$(LINUX_DIR)/net/sched/sch_qfq.ko \
-	$(LINUX_DIR)/net/sched/sch_sfb.ko \
 	$(LINUX_DIR)/net/tipc/tipc.ko \
-	$(LINUX_DIR)/net/x25/x25.ko)
+	$(LINUX_DIR)/net/tipc/tipc_diag.ko \
+	$(LINUX_DIR)/net/caif/caif.ko \
+	$(LINUX_DIR)/net/caif/chnl_net.ko \
+	$(LINUX_DIR)/net/caif/caif_socket.ko \
+	$(LINUX_DIR)/net/ceph/libceph.ko \
+	$(LINUX_DIR)/net/batman-adv/batman-adv.ko \
+	$(LINUX_DIR)/net/nfc/nfc.ko \
+	$(LINUX_DIR)/net/ife/ife.ko \
+	$(LINUX_DIR)/net/openvswitch/openvswitch.ko \
+	$(LINUX_DIR)/net/openvswitch/vport-vxlan.ko \
+	$(LINUX_DIR)/net/openvswitch/vport-geneve.ko \
+	$(LINUX_DIR)/net/openvswitch/vport-gre.ko \
+	$(LINUX_DIR)/net/hsr/hsr.ko)
 endef
 
 define KernelPackage/network-protocol-extras/description
