@@ -418,11 +418,12 @@ static u32 edma_tx_release(struct edma_queue *q, u32 idx, struct sk_buff *skb,
 	return bytes;
 }
 
-/* @napi_budget is the NAPI budget the poll was given, or zero when the caller
- * is not a poll: the skb cache napi_consume_skb() recycles into is per-CPU and
- * is only safe to touch from softirq context.
+/* Pass the original NAPI budget to napi_consume_skb(), including zero for
+ * zero-budget polls and non-NAPI drains. Its per-CPU skb cache is only safe
+ * to use from the appropriate NAPI context.
  */
-static u32 edma_clean_tx(struct edma_queue *q, int budget, int napi_budget)
+static u32 edma_clean_tx(struct edma_queue *q, int budget, int napi_budget,
+			 bool draining)
 {
 	struct edma_ring *txcmpl_ring = &q->txcmpl_ring;
 	struct edma_priv *priv = q->priv;
@@ -494,7 +495,7 @@ static u32 edma_clean_tx(struct edma_queue *q, int budget, int napi_budget)
 	 */
 	__netif_txq_completed_wake(netdev_get_tx_queue(priv->netdev, q->idx),
 				   pkts, bytes, edma_txdesc_free(q),
-				   EDMA_TX_RING_THRESH, !napi_budget);
+				   EDMA_TX_RING_THRESH, draining);
 
 	q->txcmpl_cons = cons;
 	edma_idx_write(priv, EDMA_REG_TXCMPL_CONS_IDX(soc->txcmpl_base,
@@ -839,7 +840,13 @@ static int edma_napi(struct napi_struct *napi, int budget)
 	u16 prod, cons;
 	int done;
 
-	edma_clean_tx(q, budget, budget);
+	/* A zero-budget poll must reclaim TX without touching RX or the
+	 * page pool. Bound the cleanup by the completion ring size.
+	 */
+	edma_clean_tx(q, budget ? budget : q->txcmpl_ring.count, budget, false);
+	if (!budget)
+		return 0;
+
 	done = edma_clean_rx(q, budget);
 	if (done >= budget)
 		return budget;
@@ -1227,7 +1234,7 @@ static void edma_rings_drain(struct edma_priv *priv)
 	for (i = 0; i < priv->num_queues; i++) {
 		struct edma_queue *q = &priv->q[i];
 
-		edma_clean_tx(q, INT_MAX, 0);
+		edma_clean_tx(q, INT_MAX, 0, true);
 		q->txcmpl_skb = NULL;
 		q->txcmpl_run = false;
 		edma_queue_rings_drain(q);
