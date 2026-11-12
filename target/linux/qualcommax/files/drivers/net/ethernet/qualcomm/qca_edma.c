@@ -989,11 +989,15 @@ static netdev_tx_t edma_ring_xmit(struct edma_queue *q, struct net_device *netde
 	u32 idx, i, len, bytes, tso;
 	struct sk_buff *seg;
 	dma_addr_t head_dma;
+	unsigned long flags;
 	bool taken = false;
 	bool stop;
 	__be16 proto;
 
-	spin_lock_bh(&q->tx_lock);
+	/* Netpoll may transmit with IRQs disabled while holding a TX lock.
+	 * Do not re-enable bottom halves inside that outer critical section.
+	 */
+	spin_lock_irqsave(&q->tx_lock, flags);
 
 	/* The stop below is decided on the cached index too, so it is read
 	 * again before it could stop the queue on room the engine has freed.
@@ -1111,7 +1115,7 @@ static netdev_tx_t edma_ring_xmit(struct edma_queue *q, struct net_device *netde
 		netif_txq_try_stop(txq, edma_txdesc_free(q),
 				   EDMA_TX_RING_THRESH);
 
-	spin_unlock_bh(&q->tx_lock);
+	spin_unlock_irqrestore(&q->tx_lock, flags);
 	return NETDEV_TX_OK;
 
 unmap:
@@ -1131,7 +1135,7 @@ drop:
 	dev_kfree_skb_any(skb);
 	if (q->tx_kick)
 		edma_tx_kick(q);
-	spin_unlock_bh(&q->tx_lock);
+	spin_unlock_irqrestore(&q->tx_lock, flags);
 	return NETDEV_TX_OK;
 
 busy:
@@ -1150,7 +1154,7 @@ busy:
 	netif_txq_try_stop(txq, taken ? 0 : edma_txdesc_free(q),
 			   EDMA_TX_RING_THRESH);
 
-	spin_unlock_bh(&q->tx_lock);
+	spin_unlock_irqrestore(&q->tx_lock, flags);
 	return NETDEV_TX_BUSY;
 }
 
@@ -2057,10 +2061,12 @@ static netdev_features_t edma_ndo_features_check(struct sk_buff *skb,
  */
 static void edma_tx_flush(struct edma_queue *q)
 {
-	spin_lock_bh(&q->tx_lock);
+	unsigned long flags;
+
+	spin_lock_irqsave(&q->tx_lock, flags);
 	if (q->tx_kick)
 		edma_tx_kick(q);
-	spin_unlock_bh(&q->tx_lock);
+	spin_unlock_irqrestore(&q->tx_lock, flags);
 }
 
 /* The switch port a frame from DSA leaves by, out of the QCA tag the tagger
