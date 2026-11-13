@@ -1,6 +1,6 @@
 # Latest EDMA fixes & Image 14
 
-**12 November 2026.** The latest exported report records Image14 running from TFTP RAM, while Image12 remains installed on eMMC. This is report-time state, not a live device poll. The image history distinguishes the original build source from later commits that record the same EDMA source changes.
+**13 November 2026 update.** Image14 was subsequently installed on eMMC with its selected profile and crash collector preserved. Warm-reboot console archival passed. The RAM replay below describes the earlier test stage. Image15 and Image16 are offline-verified control and candidate builds; neither has been deployed.
 
 ## The code change
 

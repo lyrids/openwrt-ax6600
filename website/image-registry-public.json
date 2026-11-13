@@ -281,6 +281,50 @@
         "ramoops"
       ],
       "fit_sha256": "001dceca26f533d467db5f2c08b267ad60953b9d37846fd0b6d7da911e45afc6"
+    },
+    {
+      "image_number": 15,
+      "title": "Matched NSS 12.5 firmware control",
+      "built_date": "2026-11-13",
+      "linux_kernel": "6.18.60",
+      "source_commit": "f10ed4c17a258e8b7df7fe4ec012b4a0763ce5ab",
+      "runtime_status": "Offline verified; not deployed",
+      "openwrt_mainstream_base": "39e77cc05db95748aad847daf0d16a148a6c91a3",
+      "parent_source_commit": "6fdfb4e6b41b4675617ad040f6b060b0b4595bea",
+      "nss_support": "Wi-Fi NSS 12.5 enabled; Ethernet-only backend off",
+      "patch_sources": "Local NSS donor e68abf244f and integrated MTU/lifetime fixes; OpenWrt ath11k backports 7.2; EDMA commits60f1e57c37 and ab443fb6c3 retained.",
+      "UAF_MTU_fixes": "Preserved HTT TX fix, RX peer snapshot, generation cookies, DMA/teardown ownership, CPPE quarantine, RCU metadata and MTU invalidation/veto fixes.",
+      "comments": "Offline verification passed: preserved kernel fixes, modules, utilities, profile and capture reservation. NSS 12.5 matched control. No deployment or mesh/stability qualification.",
+      "accel": "nss",
+      "themes": [
+        "nss",
+        "edma",
+        "mtu",
+        "lifetime",
+        "ramoops"
+      ]
+    },
+    {
+      "image_number": 16,
+      "title": "Matched NSS 11.4 firmware candidate",
+      "built_date": "2026-11-13",
+      "linux_kernel": "6.18.60",
+      "source_commit": "f10ed4c17a258e8b7df7fe4ec012b4a0763ce5ab",
+      "runtime_status": "Offline verified; not deployed",
+      "openwrt_mainstream_base": "39e77cc05db95748aad847daf0d16a148a6c91a3",
+      "parent_source_commit": "6fdfb4e6b41b4675617ad040f6b060b0b4595bea",
+      "nss_support": "Wi-Fi NSS 11.4 enabled; Ethernet-only backend off",
+      "patch_sources": "Local NSS donor e68abf244f and integrated MTU/lifetime fixes; OpenWrt ath11k backports 7.2; EDMA commits60f1e57c37 and ab443fb6c3 retained.",
+      "UAF_MTU_fixes": "Preserved HTT TX fix, RX peer snapshot, generation cookies, DMA/teardown ownership, CPPE quarantine, RCU metadata and MTU invalidation/veto fixes.",
+      "comments": "Offline verification passed: preserved kernel fixes, modules, utilities, profile and capture reservation. NSS 11.4 release6 mesh-capable candidate. No deployment or mesh/stability qualification.",
+      "accel": "nss",
+      "themes": [
+        "nss",
+        "edma",
+        "mtu",
+        "lifetime",
+        "ramoops"
+      ]
     }
   ]
 }

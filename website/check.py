@@ -48,7 +48,7 @@ for link in page.links:
  target=(p.parent/unquote(u.path)).resolve()
  if not target.is_relative_to(root/'docs') or not target.is_file():errors.append('Missing or unsafe local asset '+link)
 for asset in ('lineage.js','cppe.js','style.css','.nojekyll'):assert (root/'docs'/asset).is_file(),asset
-assert len(json.loads((root/'website/image-registry-public.json').read_text())['images'])==14
+assert len(json.loads((root/'website/image-registry-public.json').read_text())['images'])==16
 assert 'topologies/evidence/' not in p.read_text()
 if errors:raise SystemExit('\n'.join(errors))
 print('PASS: public-source privacy scan, excluded-data boundary, HTML links/anchors, JSON, SVG and repository-prefix assets')
