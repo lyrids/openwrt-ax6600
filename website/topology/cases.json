@@ -1,0 +1,18 @@
+[
+{"id":"T0","name":"Native Ethernet","description":"LAN1/br-lan to standalone LAN4; untagged on both test links."},
+{"id":"T1","name":"Tagged ingress on LAN1","description":"VLAN 103 upper on LAN1; its parent remains in br-lan. LAN4 stays native."},
+{"id":"T2","name":"Standalone LAN4 VLAN","description":"Native LAN1 to standalone lan4.104; VID 104 is tagged on the LAN4 link."},
+{"id":"T3","name":"Tagged bridge VLAN","description":"LAN4 is a tagged member of a VLAN-filtering bridge; L3 is on br-vtest.104."},
+{"id":"T4","name":"Untagged bridge access port","description":"LAN4 is untagged access/PVID 104; L3 remains on br-vtest.104."},
+{"id":"W0","name":"Native Ethernet to 5 GHz AP","description":"Native LAN1 to built-in 5 GHz AP and wrt station; QCN9074 station is outside this payload path."},
+{"id":"W1","name":"Tagged Ethernet to native Wi-Fi","description":"LAN1 carries tagged VID 103; the built-in AP and station use the native network."},
+{"id":"W2","name":"Standalone AP VLAN","description":"Native LAN1 to the standalone phy0-ap0.104 upper; VID 104 crosses the AP/STA link."},
+{"id":"W3","name":"Tagged AP bridge VLAN","description":"AP is a tagged VID 104 bridge member; L3 terminates on br-wtest.104."},
+{"id":"W4","name":"Untagged AP access/PVID","description":"AP and bridge SELF use PVID 104 untagged; IP is on br-wtest itself, unlike T4."},
+{"id":"D0","name":"Two native WLANs","description":"The 2.4 GHz and built-in 5 GHz WLANs are separate routed networks; no Ethernet payload leg."},
+{"id":"D1","name":"Tagged left AP upper","description":"Tagged VLAN 103 on the 2.4 GHz AP upper whose parent is in a dedicated bridge; the right AP stays native."},
+{"id":"D2","name":"Standalone right AP VLAN","description":"Native 2.4 GHz AP to standalone 5 GHz AP VLAN 104. One software-mode SNAT TCP timeout was retained in the extension."},
+{"id":"D3","name":"Tagged right AP bridge VLAN","description":"Right AP is a tagged VID 104 bridge member; L3 is on the bridge VLAN upper."},
+{"id":"D4","name":"Right AP access/PVID","description":"Right AP data is untagged PVID 104 while L3 is on br-dvright.104. Final access-layout rekey/reassociation was not qualified."},
+{"id":"L2","name":"Ethernet–Wi-Fi bridge control","description":"LAN1 and the built-in AP share one bridge domain; payload uses L2 forwarding without IP routing or NAT."}
+]

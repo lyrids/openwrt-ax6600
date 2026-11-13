@@ -1,108 +1,56 @@
-![OpenWrt logo](include/logo.png)
+# OpenWrt AX6600
 
-OpenWrt Project is a Linux operating system targeting embedded devices. Instead
-of trying to create a single, static firmware, OpenWrt provides a fully
-writable filesystem with package management. This frees you from the
-application selection and configuration provided by the vendor and allows you
-to customize the device through the use of packages to suit any application.
-For developers, OpenWrt is the framework to build an application without having
-to build a complete firmware around it; for users this means the ability for
-full customization, to use the device in ways never envisioned.
+Mainstream-derived OpenWrt development for the **JDCloud RE-CS-02 / AX6600**, based on Qualcomm IPQ6010 (`qualcommax/ipq60xx`). This repository brings together board support, the upstream EDMA/PPE networking stack, Wi-Fi NSS integration, and fixes for MTU handling and object lifetime.
 
-Sunshine!
+**[Read the AX6600 Field Notes website →](https://lyrids.github.io/openwrt-ax6600/)**
 
-## Download
+The website includes hardware and datapath explanations, an interactive image-lineage diagram, anonymized topology diagrams, and experiment summaries with their conclusions and limits. It excludes private deployment configuration, detailed test reports, raw packet captures and per-case datasets. [Browse the website files](docs/) or [edit the curated source](website/).
 
-Built firmware images are available for many architectures and come with a
-package selection to be used as WiFi home router. To quickly find a factory
-image usable to migrate from a vendor stock firmware to OpenWrt, try the
-*Firmware Selector*.
+## Project status
 
-* [OpenWrt Firmware Selector](https://firmware-selector.openwrt.org/)
+The development line uses Linux 6.18.60 on the recorded OpenWrt base `39e77cc05db95748aad847daf0d16a148a6c91a3`. The latest recorded DUT candidate, Image 14, was built from `21efb75b4c` plus EDMA changes subsequently committed as:
 
-If your device is supported, please follow the **Info** link to see install
-instructions or consult the support resources listed below.
+- `60f1e57c37` — handle zero-budget NAPI polls without entering RX/page-pool work.
+- `ab443fb6c3` — preserve IRQ state around EDMA transmit locks.
 
-##
+Merge `6f24f8a02b` brought that tested development source into `main`. Website-only commits can follow it without changing the firmware source. [OpenWrt issue #26660](https://github.com/openwrt/openwrt/issues/26660) tracks upstream review; inclusion here does not imply upstream acceptance.
 
-An advanced user may require additional or specific package. (Toolchain, SDK, ...) For everything else than simple firmware download, try the wiki download page:
+Image 14 passed **16/16 bounded T4/F10 quality cases** with software flow offload, receive steering and fresh mid-load netconsole markers. Eight UDP cases at 25 Mbps reported zero receiver loss; TCP receiver rates were **840.14–922.47 Mbps**. This short replay does not establish long-term stability or prove the cause of earlier resets.
 
-* [OpenWrt Wiki Download](https://openwrt.org/downloads)
+Earlier Image 10 passed **708 selected UDP MTU cases and 114 TCP recovery checks**. Those results apply to that campaign and are not inherited by every later image. The website records the remaining reset, loss, endpoint and recovery limits alongside the results.
 
-## Development
+## Networking architecture
 
-To build your own firmware you need a GNU/Linux, BSD or macOS system (case
-sensitive filesystem required). Cygwin is unsupported because of the lack of a
-case sensitive file system.
+- **EDMA and DSA:** host packet I/O and Linux switch-port integration.
+- **CPPE/PPE:** the switch packet engine and its host-driven flow-offload integration.
+- **NSS:** a separate firmware-driven acceleration path, including the Wi-Fi integration.
+- **ath11k/mac80211 and netfilter:** wireless ownership, packet lifetime, forwarding and MTU correctness across the stack.
 
-### Requirements
+The recorded NSS mode enables Wi-Fi NSS and disables the separate Ethernet-only NSS backend. Firewall software/hardware-offload settings are a separate choice. A hardware-offload flag alone does not prove which engine handled a flow.
 
-You need the following tools to compile OpenWrt, the package names vary between
-distributions. A complete list with distribution specific packages is found in
-the [Build System Setup](https://openwrt.org/docs/guide-developer/build-system/install-buildsystem)
-documentation.
+## Build and use
 
-```
-binutils bzip2 diff find flex gawk gcc-6+ getopt grep install libc-dev libz-dev
-make4.1+ perl python3.8+ rsync subversion unzip which
+This is a source repository for development, not a universal flashing recipe. The published website contains no firmware images or private build overlays. Candidate images used pinned source/feed revisions and device-specific configuration; source commit alone does not describe every historical image.
+
+Use the [OpenWrt build-system documentation](https://openwrt.org/docs/guide-developer/toolchain/use-buildsystem), select the JDCloud RE-CS-02 device under `qualcommax/ipq60xx`, and record the source, feeds, configuration and image digest for a reproducible build. Validate board revision, calibration data, partition layout and recovery independently before installing an image. See [the original OpenWrt README](README.openwrt.md) for upstream project resources.
+
+## Website maintenance
+
+The tracked `website/` directory contains the curated public content and its dependency-free builder. Generated static files live in `docs/` and are served by GitHub Pages from `main`.
+
+```sh
+python3 website/build.py
+python3 website/check.py
 ```
 
-### Quickstart
+Commit both the source and regenerated `docs/` when updating the site. Keep only summaries, conclusions, aggregate results and relevant source references. Retain detailed evidence privately. The build intentionally cleans `docs/`; do not put unrelated files there.
 
-1. Run `./scripts/feeds update -a` to obtain all the latest package definitions
-   defined in feeds.conf / feeds.conf.default
+## Repository lineage and credits
 
-2. Run `./scripts/feeds install -a` to install symlinks for all obtained
-   packages into package/feeds/
+`lyrids/openwrt-ax6600` was formerly named `lyrids/openwrt-ipq6010-ppe-nss`. It is an independent GitHub repository carrying OpenWrt-derived history and local AX6600 development. `main` is the canonical line for this project.
 
-3. Run `make menuconfig` to select your preferred configuration for the
-   toolchain, target system & firmware packages.
+- [OpenWrt](https://github.com/openwrt/openwrt): upstream platform, build system and networking drivers.
+- [JuliusBairaktaris/openwrt-ppe-nss](https://github.com/JuliusBairaktaris/openwrt-ppe-nss): PPE/NSS donor work and integration lineage.
+- [lyrids/openwrt-ppe-nss](https://github.com/lyrids/openwrt-ppe-nss): separate donor-tracking fork; its default branch is not this project's current development line.
 
-4. Run `make` to build your firmware. This will download all sources, build the
-   cross-compile toolchain and then cross-compile the GNU/Linux kernel & all chosen
-   applications for your target system.
-
-### Related Repositories
-
-The main repository uses multiple sub-repositories to manage packages of
-different categories. All packages are installed via the OpenWrt package
-manager called `opkg`. If you're looking to develop the web interface or port
-packages to OpenWrt, please find the fitting repository below.
-
-* [LuCI Web Interface](https://github.com/openwrt/luci): Modern and modular
-  interface to control the device via a web browser.
-
-* [OpenWrt Packages](https://github.com/openwrt/packages): Community repository
-  of ported packages.
-
-* [OpenWrt Routing](https://github.com/openwrt/routing): Packages specifically
-  focused on (mesh) routing.
-
-* [OpenWrt Video](https://github.com/openwrt/video): Packages specifically
-  focused on display servers and clients (Xorg and Wayland).
-
-## Support Information
-
-For a list of supported devices see the [OpenWrt Hardware Database](https://openwrt.org/supported_devices)
-
-### Documentation
-
-* [Quick Start Guide](https://openwrt.org/docs/guide-quick-start/start)
-* [User Guide](https://openwrt.org/docs/guide-user/start)
-* [Developer Documentation](https://openwrt.org/docs/guide-developer/start)
-* [Technical Reference](https://openwrt.org/docs/techref/start)
-
-### Support Community
-
-* [Forum](https://forum.openwrt.org): For usage, projects, discussions and hardware advise.
-* [Support Chat](https://webchat.oftc.net/#openwrt): Channel `#openwrt` on **oftc.net**.
-
-### Developer Community
-
-* [Bug Reports](https://bugs.openwrt.org): Report bugs in OpenWrt
-* [Dev Mailing List](https://lists.openwrt.org/mailman/listinfo/openwrt-devel): Send patches
-* [Dev Chat](https://webchat.oftc.net/#openwrt-devel): Channel `#openwrt-devel` on **oftc.net**.
-
-## License
-
-OpenWrt is licensed under GPL-2.0
+Existing source licenses and copyright notices remain authoritative. The original OpenWrt project documentation is preserved in `README.openwrt.md`.

@@ -1,0 +1,286 @@
+{
+  "images": [
+    {
+      "image_number": 1,
+      "title": "Native lockup/watchdog diagnostic",
+      "built_date": "2026-10-31",
+      "linux_kernel": "6.18.55",
+      "comments": "Native lockup/watchdog diagnostics. Source commit alone omits local diagnostic and UAF changes.",
+      "source_commit": "a516fe3151abf787a4b1e428d692700a86626d3f",
+      "runtime_status": "historical / superseded",
+      "openwrt_mainstream_base": "a516fe3151abf787a4b1e428d692700a86626d3f",
+      "parent_source_commit": "",
+      "nss_support": "Absent",
+      "patch_sources": "OpenWrt backports 7.2 + local ath11k 102 patch; no NSS patches",
+      "UAF_MTU_fixes": "HTT TX UAF fix as local delta; no local MTU series",
+      "accel": "native",
+      "themes": []
+    },
+    {
+      "image_number": 2,
+      "title": "Initial Wi-Fi NSS candidate",
+      "built_date": "2026-11-01",
+      "linux_kernel": "6.18.55",
+      "comments": "NSS initialization rejected by EDMA shared-DMA reset/queue ownership; superseded by #3.",
+      "source_commit": "e62fbb3bf41264dfd8a6649f88b1975f149442c8",
+      "runtime_status": "historical / superseded",
+      "openwrt_mainstream_base": "a516fe3151abf787a4b1e428d692700a86626d3f",
+      "parent_source_commit": "",
+      "nss_support": "Compiled; startup failed",
+      "patch_sources": "NSS donor e68abf244f \u2192 e62fbb3bf4; backports 7.2 + local 102/NSS patches",
+      "UAF_MTU_fixes": "HTT UAF fix; initial MTU guards only",
+      "accel": "failed",
+      "themes": [
+        "nss",
+        "edma",
+        "mtu"
+      ]
+    },
+    {
+      "image_number": 3,
+      "title": "Corrected NSS startup",
+      "built_date": "2026-11-01",
+      "linux_kernel": "6.18.55",
+      "comments": "Corrected NSS startup. Historical MTU matrix retained enforcement and packet-loss failures.",
+      "source_commit": "8c006513ac108485272cdd88d27f55736d3e4f81",
+      "runtime_status": "historical / superseded",
+      "openwrt_mainstream_base": "a516fe3151abf787a4b1e428d692700a86626d3f",
+      "parent_source_commit": "",
+      "nss_support": "Wi-Fi NSS 12.5; Ethernet-only NSS off",
+      "patch_sources": "Same donor/NSS stack + EDMA fixes 8c006513ac; backports 7.2 + 102",
+      "UAF_MTU_fixes": "HTT UAF fix; initial MTU guards only",
+      "accel": "nss",
+      "themes": [
+        "nss",
+        "edma",
+        "mtu"
+      ]
+    },
+    {
+      "image_number": 4,
+      "title": "MTU-correctness NSS image",
+      "built_date": "2026-11-01",
+      "linux_kernel": "6.18.55",
+      "comments": "Selected MTU enforcement passed; 28 in-range loss points remained. Previously deployed; replaced by #9.",
+      "source_commit": "3196df75e4817d2e68cc0fb1a1b03021e5bf2421",
+      "runtime_status": "historical / superseded",
+      "openwrt_mainstream_base": "a516fe3151abf787a4b1e428d692700a86626d3f",
+      "parent_source_commit": "",
+      "nss_support": "Wi-Fi NSS 12.5; Ethernet-only NSS off",
+      "patch_sources": "e68 donor via e62/8c + local MTU series 18165fc0e8 \u2192 3196df75e4",
+      "UAF_MTU_fixes": "HTT UAF fix + full historical MTU series",
+      "accel": "nss",
+      "themes": [
+        "nss",
+        "edma",
+        "mtu"
+      ]
+    },
+    {
+      "image_number": 5,
+      "title": "Native-mode isolation control",
+      "built_date": "2026-11-02",
+      "linux_kernel": "6.18.55",
+      "comments": "Matched receive-path isolation control; three overlay files differ from #4. Loss also reproduced in native mode.",
+      "source_commit": "3196df75e4817d2e68cc0fb1a1b03021e5bf2421",
+      "runtime_status": "historical / superseded",
+      "openwrt_mainstream_base": "a516fe3151abf787a4b1e428d692700a86626d3f",
+      "parent_source_commit": "",
+      "nss_support": "Compiled; native ath11k selected, NSS firmware boot0",
+      "patch_sources": "Same source, modules and firmware as #4; native-mode overlay",
+      "UAF_MTU_fixes": "Same fixes as #4",
+      "accel": "native",
+      "themes": [
+        "nss",
+        "edma",
+        "mtu"
+      ]
+    },
+    {
+      "image_number": 6,
+      "title": "Clean native PR candidate",
+      "built_date": "2026-11-05",
+      "linux_kernel": "6.18.60",
+      "comments": "Clean/default native FIT; no private lab profile. Retained separately.",
+      "source_commit": "fc731b4e629f27f3a23cb77323dac72c7907016b",
+      "runtime_status": "historical / superseded",
+      "openwrt_mainstream_base": "d13ba979b017b63ebc18a4deab161b9557ea07f3",
+      "parent_source_commit": "",
+      "nss_support": "Absent",
+      "patch_sources": "OpenWrt backports 7.2; no added NSS/HTT UAF patch",
+      "UAF_MTU_fixes": "Focused generic MTU invalidation + selftest; added HTT UAF fix absent",
+      "accel": "native",
+      "themes": [
+        "mtu"
+      ]
+    },
+    {
+      "image_number": 7,
+      "title": "Intermediate native lab FIT",
+      "built_date": "2026-11-05",
+      "linux_kernel": "6.18.60",
+      "comments": "Intermediate lab FIT; superseded when the unavailable NSS firewall include was removed.",
+      "source_commit": "fc731b4e629f27f3a23cb77323dac72c7907016b",
+      "runtime_status": "historical / superseded",
+      "openwrt_mainstream_base": "d13ba979b017b63ebc18a4deab161b9557ea07f3",
+      "parent_source_commit": "",
+      "nss_support": "Absent",
+      "patch_sources": "Same source patch set as #6; initial p43-derived native overlay",
+      "UAF_MTU_fixes": "Same focused MTU fix as #6; added HTT UAF fix absent",
+      "accel": "native",
+      "themes": [
+        "mtu"
+      ]
+    },
+    {
+      "image_number": 8,
+      "title": "Final native lab candidate",
+      "built_date": "2026-11-05",
+      "linux_kernel": "6.18.60",
+      "comments": "Final native lab candidate; FIT/metadata verified, prepared generic sources match 12/12 QEMU-qualified implementation. Not DUT-booted.",
+      "source_commit": "fc731b4e629f27f3a23cb77323dac72c7907016b",
+      "runtime_status": "built, not DUT-booted",
+      "openwrt_mainstream_base": "d13ba979b017b63ebc18a4deab161b9557ea07f3",
+      "parent_source_commit": "",
+      "nss_support": "Absent",
+      "patch_sources": "Same source patch set as #6; corrected native lab overlay",
+      "UAF_MTU_fixes": "Same focused MTU fix as #6; added HTT UAF fix absent",
+      "accel": "native",
+      "themes": [
+        "mtu"
+      ]
+    },
+    {
+      "image_number": 9,
+      "title": "Final updated NSS and full-MTU lab candidate",
+      "built_date": "2026-11-05",
+      "linux_kernel": "6.18.60",
+      "comments": "Historical image; boot [boot identifier omitted]. 119 modules/23 firmware files verified. WAN SSH runtime rule; original FIT unchanged. Completed 39/39 bounded station stress cases without an observed DUT reset; high-rate packet loss persists. External AP reboot required targeted QCN reassociation. Independent m4 phase: 9/11 cases recorded; TCP control failure and management-capture limitation retained, two remaining cases left incomplete by explicit user decision. Settings restored. Physical MTU regression and stability remain unqualified.",
+      "source_commit": "275bb38e587bb22e369e49539cbc8a4562732291",
+      "runtime_status": "Historical image; preserved as private RAM rollback",
+      "openwrt_mainstream_base": "39e77cc05db95748aad847daf0d16a148a6c91a3",
+      "parent_source_commit": "3b9d911f080d1d2412612e138de215beb3fe1be6",
+      "nss_support": "Wi-Fi NSS 12.5 active; Ethernet-only NSS off",
+      "patch_sources": "NSS/EDMA e62/8c prerequisites + 18165fc0e8/3196df75e4 reconciled in 275bb38e58; backports 7.2 + preserved 2422dbcf36 HTT fix",
+      "UAF_MTU_fixes": "HTT UAF fix + focused generic fix/selftest + full historical MTU guards",
+      "accel": "nss",
+      "themes": [
+        "nss",
+        "edma",
+        "mtu"
+      ]
+    },
+    {
+      "image_number": 10,
+      "title": "CPPE/NSS lifetime and IPv6 MTU review fixes",
+      "built_date": "2026-11-05",
+      "linux_kernel": "6.18.60",
+      "comments": "Selected campaign: 708 UDP MTU cases and 114 TCP checks passed; 39 station-load cases completed without an observed reset. High-rate loss and endpoint limits remained. Later installed to secondary eMMC and replaced by Image 12.",
+      "source_commit": "654537ab270aa2a7442ee248ca97c646955e39aa",
+      "runtime_status": "Historical Image10; replaced in p17/p20 by Image12 sysupgrade; original artifacts and settings references retained",
+      "openwrt_mainstream_base": "39e77cc05db95748aad847daf0d16a148a6c91a3",
+      "parent_source_commit": "275bb38e587bb22e369e49539cbc8a4562732291",
+      "nss_support": "NSS12.5 Wi-Fi enabled; Ethernet-only backend off",
+      "patch_sources": "Image9 NSS/EDMA + backports7.2 prerequisites; local signed 85f1dac402,164aedcd40,69a347825a,ef2dd21007,654537ab27",
+      "UAF_MTU_fixes": "Generation cookie registry, DMA ownership and NAPI teardown; uncertain CPPE row quarantine; immutable RCU CPU metadata; IPv6 mtu6 notifier/veto/invalidation; ath11k RX peer MAC snapshot; preserved HTT fix",
+      "accel": "nss",
+      "themes": [
+        "nss",
+        "edma",
+        "mtu",
+        "lifetime"
+      ]
+    },
+    {
+      "image_number": 11,
+      "title": "Broad network modules, intermediate BBR-default candidate",
+      "built_date": "2026-11-07",
+      "linux_kernel": "6.18.60",
+      "comments": "292 requested native tristates set to m; 549 total modules. Boolean/choice exceptions recorded. Intermediate FIT switched TCP default to BBR; superseded before DUT boot.",
+      "source_commit": "ab371c1e71627cd3da66dc9695fe365c770cbd40",
+      "runtime_status": "Superseded offline candidate; never DUT booted",
+      "openwrt_mainstream_base": "39e77cc05db95748aad847daf0d16a148a6c91a3",
+      "parent_source_commit": "f36aa27d0e270e628692f60a649d204b5446e73f",
+      "nss_support": "NSS12.5 Wi-Fi enabled; Ethernet-only backend off",
+      "patch_sources": "Image10 lifetime/MTU/NSS/EDMA and backports7.2; eMMC configuration-copy hook; broad Kconfig/module packaging; QAT field_get rename",
+      "UAF_MTU_fixes": "Generation cookie registry, DMA ownership and NAPI teardown; uncertain CPPE row quarantine; immutable RCU CPU metadata; IPv6 mtu6 notifier/veto/invalidation; ath11k RX peer MAC snapshot; preserved HTT fix",
+      "accel": "nss",
+      "themes": [
+        "nss",
+        "edma",
+        "mtu",
+        "lifetime",
+        "modules"
+      ]
+    },
+    {
+      "image_number": 12,
+      "title": "Broad network modules, preserved TCP default",
+      "built_date": "2026-11-07",
+      "linux_kernel": "6.18.60",
+      "comments": "Installed Image12 remains on eMMC. Later DT-only ramoops activation preserved executable kernel bytes. Historical MTU/load qualification is not inherited automatically by new candidates.",
+      "source_commit": "21efb75b4c55fa119cbb34cecebdf0baaf5f3a41",
+      "runtime_status": "Installed eMMC Image12 fallback; later ramoops DT-only kernel activation recorded. Image14 RAM is latest reported running candidate.",
+      "openwrt_mainstream_base": "39e77cc05db95748aad847daf0d16a148a6c91a3",
+      "parent_source_commit": "f36aa27d0e270e628692f60a649d204b5446e73f",
+      "nss_support": "NSS12.5 Wi-Fi enabled; Ethernet-only backend off",
+      "patch_sources": "Image10 lifetime/MTU/NSS/EDMA and backports7.2; eMMC configuration-copy hook; broad Kconfig/module packaging; QAT field_get rename",
+      "UAF_MTU_fixes": "Generation cookie registry, DMA ownership and NAPI teardown; uncertain CPPE row quarantine; immutable RCU CPU metadata; IPv6 mtu6 notifier/veto/invalidation; ath11k RX peer MAC snapshot; preserved HTT fix",
+      "accel": "nss",
+      "themes": [
+        "nss",
+        "edma",
+        "mtu",
+        "lifetime",
+        "modules"
+      ]
+    },
+    {
+      "openwrt_mainstream_base": "39e77cc05db95748aad847daf0d16a148a6c91a3",
+      "linux_kernel": "6.18.60",
+      "source_commit": "21efb75b4c55fa119cbb34cecebdf0baaf5f3a41",
+      "nss_support": "NSS12.5 Wi-Fi enabled; Ethernet-only backend off",
+      "image_number": 13,
+      "title": "EDMA netpoll/NAPI RAM candidate",
+      "built_date": "2026-11-12",
+      "parent_source_commit": "21efb75b4c55fa119cbb34cecebdf0baaf5f3a41",
+      "comments": "EDMA RAM candidate; missing WireGuard executable corrected in Image14. Historical build provenance predates the later fix commits.",
+      "runtime_status": "Historical RAM candidate; superseded",
+      "patch_sources": "Built from Image12 source with a working-tree EDMA delta; identical driver changes subsequently committed as 60f1e57c37 and ab443fb6c3; ramoops capture retained",
+      "UAF_MTU_fixes": "Inherited Image12 fixes; EDMA netpoll/NAPI correction; qualification remains scoped",
+      "accel": "nss",
+      "themes": [
+        "nss",
+        "edma",
+        "mtu",
+        "lifetime",
+        "modules",
+        "ramoops"
+      ]
+    },
+    {
+      "openwrt_mainstream_base": "39e77cc05db95748aad847daf0d16a148a6c91a3",
+      "linux_kernel": "6.18.60",
+      "source_commit": "21efb75b4c55fa119cbb34cecebdf0baaf5f3a41",
+      "nss_support": "NSS12.5 Wi-Fi enabled; Ethernet-only backend off",
+      "image_number": 14,
+      "title": "EDMA fix with WireGuard packaging restored",
+      "built_date": "2026-11-12",
+      "parent_source_commit": "21efb75b4c55fa119cbb34cecebdf0baaf5f3a41",
+      "comments": "Latest exported report: RAM boot and active ramoops verified; 16/16 T4 F10 cases passed with mid-load netconsole. One previously failing case passed once; T5 and endurance unqualified. Image12 remains installed.",
+      "runtime_status": "Latest report: running TFTP RAM candidate; not stability-qualified",
+      "patch_sources": "Built from Image12 source with a working-tree EDMA delta; identical driver changes subsequently committed as 60f1e57c37 and ab443fb6c3; ramoops capture retained",
+      "UAF_MTU_fixes": "Inherited Image12 fixes; EDMA netpoll/NAPI correction; qualification remains scoped",
+      "accel": "nss",
+      "themes": [
+        "nss",
+        "edma",
+        "mtu",
+        "lifetime",
+        "modules",
+        "ramoops"
+      ],
+      "fit_sha256": "001dceca26f533d467db5f2c08b267ad60953b9d37846fd0b6d7da911e45afc6"
+    }
+  ]
+}
