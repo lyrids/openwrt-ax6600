@@ -31,7 +31,7 @@ define KernelPackage/nss-wifi-drv/description
   The module does not autoload: the nss-wifi service loads it and boots a
   core when nss-wifi.general.offload is 1, the default. The wired ports
   never depend on it. nss-wifi.general.firmware picks the firmware line,
-  12.5 by default or 11.4 for 802.11s mesh.
+  11.4 by default for the mesh-capable firmware experiment.
 endef
 
 define Build/Prepare

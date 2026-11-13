@@ -64,7 +64,7 @@ define Package/nss-firmware/config
 
   choice
     prompt "Version"
-    default NSS_FIRMWARE_VERSION_12_5
+    default NSS_FIRMWARE_VERSION_11_4
 
     config NSS_FIRMWARE_VERSION_12_5
           bool "NSS Firmware 12.5 Release 210"
