@@ -12,7 +12,7 @@ PKG_VERSION:=2025.05.01
 PKG_HASH:=10a4b1e69470db150915cb063525436494b8ae4eebb8b50ea6ad894082d7abb0
 PKG_SOURCE_URL:=https://github.com/qosmio/qca-sdk-nss-fw/releases/download/v$(PKG_VERSION)
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.zst
-PKG_RELEASE:=2
+PKG_RELEASE:=3
 
 PKG_LICENSE_FILES:=LICENSE.md
 
@@ -20,7 +20,8 @@ PKG_MAINTAINER:=Sean K <datapronix@protonmail.com>
 
 PKG_CONFIG_DEPENDS:= \
 	CONFIG_NSS_FIRMWARE_VERSION_11_4 \
-	CONFIG_NSS_FIRMWARE_VERSION_12_5
+	CONFIG_NSS_FIRMWARE_VERSION_12_5 \
+	CONFIG_NSS_FIRMWARE_INCLUDE_ALL
 
 include $(INCLUDE_DIR)/package.mk
 
@@ -79,14 +80,24 @@ define Package/nss-firmware/config
                needed for mesh offload. Every firmware newer than 11.4
                rejects mesh interface allocation.
   endchoice
+
+  config NSS_FIRMWARE_INCLUDE_ALL
+    bool "Include both supported NSS firmware versions"
+    default n
+    help
+         Install both NSS 11.4 release 6 and NSS 12.5 release 210.
+         The version choice above still selects the unversioned symlink.
+         With nss-wifi-drv, the nss-wifi UCI firmware option selects the
+         version loaded at the next boot. This does not enable live switching.
   endmenu
 endef
 
-# Install only the selected firmware line for this minimal image.
-# The plain name points at that selected version.
+# Install the selected line, or both lines when explicitly requested.
+# The plain name always points at the build-selected version.
 NSS_LINE_12.5:=210 QCA_Networking_2024.SPF_12.5/ED1
 NSS_LINE_11.4:=6 QCA_Networking_2021.SPF_11.4/CS
 NSS_LINE:=$(if $(CONFIG_NSS_FIRMWARE_VERSION_11_4),11.4,12.5)
+NSS_INSTALL_LINES:=$(if $(CONFIG_NSS_FIRMWARE_INCLUDE_ALL),11.4 12.5,$(NSS_LINE))
 
 define nss-firmware-line
 	$(INSTALL_DIR) $(PKG_BUILD_DIR)/$(IPQ_PLATFORM)/$(2)
@@ -104,7 +115,7 @@ endef
 
 define Package/nss-firmware-common/install
 	$(INSTALL_DIR) $(1)/lib/firmware
-	$(call nss-firmware-line,$(1),$(NSS_LINE))
+	$(foreach line,$(NSS_INSTALL_LINES),$(call nss-firmware-line,$(1),$(line)))
 	$(LN) qca-nss0-retail-$(NSS_LINE).bin $(1)/lib/firmware/qca-nss0-retail.bin
 	$(if $(filter HK,$(NSS_SOC)),$(LN) qca-nss1-retail-$(NSS_LINE).bin \
 		$(1)/lib/firmware/qca-nss1-retail.bin)
