@@ -30,6 +30,8 @@ The recorded NSS mode enables Wi-Fi NSS and disables the separate Ethernet-only 
 
 ## Build and use
 
+Use the [public AX6600 GitHub build workflow](.github/AX6600_BUILD.md) to select NSS 11.4, 12.5, or both and publish default-configured trial images as a GitHub prerelease.
+
 This is a source repository for development, not a universal flashing recipe. The published website contains no firmware images or private build overlays. Candidate images used pinned source/feed revisions and device-specific configuration; source commit alone does not describe every historical image.
 
 Use the [OpenWrt build-system documentation](https://openwrt.org/docs/guide-developer/toolchain/use-buildsystem), select the JDCloud RE-CS-02 device under `qualcommax/ipq60xx`, and record the source, feeds, configuration and image digest for a reproducible build. Validate board revision, calibration data, partition layout and recovery independently before installing an image. See [the original OpenWrt README](README.openwrt.md) for upstream project resources.

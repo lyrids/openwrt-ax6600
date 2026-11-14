@@ -36,3 +36,6 @@ git-src
 .ccache
 .sccache
 .vscode*
+
+# Public GitHub firmware build outputs
+/ci-output/
