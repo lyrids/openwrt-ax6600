@@ -16,7 +16,7 @@ The goal was to retain a mainstream OpenWrt base while bringing back the acceler
 
 ## Capture-enabled candidates · 12 November
 
-Image13 brought the local EDMA netpoll/NAPI patch into a RAM candidate but lacked the WireGuard executable. Image14 restored that tool, retained the customized handler and active ramoops, and passed16 selected T4/F10 cases. The candidate used a working-tree patch on Image12 source; that source change is now committed in this repository; the precise fault cause and long-term stability remain unproven. Image12 remains installed on eMMC.
+Image13 brought the local EDMA netpoll/NAPI patch into a RAM candidate but lacked the WireGuard executable. Image14 restored that tool, retained the customized handler and active ramoops, and passed16 selected T4/F10 cases. The candidate used a working-tree patch on Image12 source; that source change is now committed in this repository; the precise fault cause and long-term stability remain unproven. Image12 was installed at that report time; router A later moved to Image17 on eMMC.
 
 ## Patch categories to audit
 
