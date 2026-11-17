@@ -36,6 +36,7 @@ for f in sorted((root/'knowledge').glob('*.md')):
         body = render(current) + '<details class="activity-log" id="mesh-activity-log"><summary>Expand archived activity log and failed attempts</summary><div>' + render(history) + '</div></details>'
     else:
         body = render(t)
+    body = body.replace("<p>MESH_TOPOLOGY_DIAGRAMS</p>", "<div class=\"case-image overview\"><img src=\"topologies/wired-mesh-baseline.svg\" alt=\"Baseline wired endpoints and integrated radio mesh\"></div><div class=\"case-image overview\"><img src=\"topologies/wired-mesh-swapped.svg\" alt=\"Requested radio-swapped mesh layout, not yet qualified\"></div>")
     articles.append((f.stem,title,body))
 registry=json.loads((root/'image-registry-public.json').read_text())
 topology=json.loads((root/'topology/cases.json').read_text())
