@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 380" role="img" aria-labelledby="title desc">
+<title id="title">Router-local AP and station comparison</title><desc id="desc">Router A access point and router B station exchange router-local iperf traffic over channel 149 HE80 SAE. Management is separate and test hosts carry no payload.</desc>
+<style>text{font-family:system-ui,sans-serif;fill:#243c3d}.title{font-size:21px;font-weight:700}.label{font-size:18px}.small{font-size:15px}.box{fill:#f8faf5;stroke:#66817b;stroke-width:2}.link{stroke:#49726c;stroke-width:4;fill:none}.mgmt{stroke:#a47542;stroke-width:3;stroke-dasharray:8 7;fill:none}</style>
+<rect width="1200" height="380" rx="16" fill="#eef3ec"/><text x="35" y="40" class="title">ROUTER-LOCAL AP / STATION CONTROL</text>
+<rect class="box" x="60" y="100" width="300" height="120" rx="12"/><text x="85" y="142" class="label">Router A · AP</text><text x="85" y="174" class="small">iperf3 endpoint on router</text>
+<rect class="box" x="840" y="100" width="300" height="120" rx="12"/><text x="865" y="142" class="label">Router B · station</text><text x="865" y="174" class="small">iperf3 endpoint on router</text>
+<path class="link" d="M360 160H840"/><text x="600" y="125" text-anchor="middle" class="small">Channel 149 · HE80 · SAE</text>
+<path class="mgmt" d="M210 220V290H990V220"/><text x="600" y="280" text-anchor="middle" class="small">Separate management paths</text>
+<text x="600" y="340" text-anchor="middle" class="small">Mesh interfaces removed · no test-host payload · router-local termination</text></svg>
